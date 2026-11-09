@@ -74,11 +74,25 @@
   #stagebar .btn { padding: 2px 8px; font-size: 11px; }
   #stagebar .sp { flex: 1; }
   #frameWrap { position: relative; width: 100%; overflow: hidden; }
+  #skinWrap {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    overflow: hidden; display: none; background: #06090f; border-radius: 8px;
+  }
+  #skinFrame { width: 100%; height: 100%; border: 0; background: #06090f; display: block; }
   #frame {
     width: 100%; height: 360px; border: 0; background: transparent; display: block;
     transform-origin: top left;
   }
   #hint { text-align: center; color: #6f7b8c; font-size: 11px; margin-top: 8px; }
+  #stageEmpty {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; height: 360px; border: 1px dashed #26313f; border-radius: 10px;
+    background: rgba(12, 17, 25, .5); text-align: center; padding: 24px;
+  }
+  #stageEmpty .se-t { font-size: 15px; color: #d7e2f2; letter-spacing: .04em; }
+  #stageEmpty .se-s { font-size: 12px; color: #8d9aad; max-width: 460px; line-height: 1.7; }
+  #stageEmpty .se-url { font-size: 11px; color: #6f7b8c; margin-top: 4px; }
+  #stageEmpty code { color: #8fe3ff; background: rgba(0, 229, 255, .08); padding: 1px 5px; border-radius: 4px; }
   #statusbar {
     position: fixed; left: 16px; bottom: 12px; width: 348px;
     display: flex; gap: 8px; align-items: center; font-size: 11px; color: #7d8798;
@@ -122,29 +136,14 @@
   <div class="sub">左边改，右边立刻变；OBS 里的浮层也不用刷新。</div>
 
   <div class="tabs">
-    <button class="tab on" id="tab-diy">DIY 调整</button>
+    <button class="tab on" id="tab-diy">DIY</button>
     <button class="tab" id="tab-skin">皮肤</button>
-  </div>
-
-  <div class="box">
-    <h2>游戏时长（选进程，用它的运行时间计时）</h2>
-    <div class="row">
-      <select id="c-game-proc" style="flex:1"></select>
-      <button class="btn" id="c-game-refresh" title="重新扫一遍正在运行的程序">刷新</button>
-    </div>
-    <div class="row">
-      <input type="text" id="c-game-manual" placeholder="或手填 exe 名，例如 GenshinImpact.exe" style="flex:1">
-      <button class="btn" id="c-game-save">用这个</button>
-    </div>
-    <div class="lbl"><span>时长环满格（小时）</span><b id="c-game-hours-v">4</b></div>
-    <input type="range" id="c-game-hours" min="0.5" max="12" step="0.5" value="4">
-    <div style="color:#6f7b8c;font-size:11px" id="c-game-hint">当前：未选</div>
   </div>
 
   <div id="diy">
 
   <div class="box">
-    <h2>左边一组：图标 + 数字</h2>
+    <h2>主体</h2>
     <div class="row">
       <div class="lbl"><span>图标</span></div>
       <div class="inline">
@@ -154,16 +153,39 @@
       <input type="file" id="c-icon-file" accept="image/*" style="display:none">
     </div>
     <div class="row">
-      <div class="lbl"><span>图标尺寸</span><b id="c-icon-size-v">42</b></div>
-      <input type="range" id="c-icon-size" min="12" max="240" step="1" value="42">
+      <div class="lbl"><span>图标尺寸</span><b id="c-icon-size-v">55</b></div>
+      <input type="range" id="c-icon-size" min="12" max="240" step="1" value="55">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>图标跳动频率（0=不跳）</span><b id="c-beat-hz-v">关</b></div>
+      <input type="range" id="c-beat-hz" min="0" max="3" step="0.1" value="0">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>图标 左右</span><b id="c-icon-offx-v">0</b></div>
+      <input type="range" id="c-icon-offx" min="-60" max="60" step="1" value="0">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>图标 上下</span><b id="c-icon-offy-v">0</b></div>
+      <input type="range" id="c-icon-offy" min="-60" max="60" step="1" value="0">
     </div>
     <div class="row">
       <div class="lbl"><span>图标 ↔ 数字 间距</span><b id="c-gap-v">14</b></div>
       <input type="range" id="c-gap" min="0" max="80" step="1" value="14">
     </div>
     <div class="row">
-      <div class="lbl"><span>数字字号</span><b id="c-num-size-v">60</b></div>
-      <input type="range" id="c-num-size" min="16" max="200" step="1" value="60">
+      <div class="lbl"><span>数字字号</span><b id="c-num-size-v">跟图标</b></div>
+      <input type="range" id="c-num-size" min="16" max="200" step="1" value="75">
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:#8d97a8">
+        <input type="checkbox" id="c-num-auto" checked> 跟随图标高度（等高，底面自动对齐）
+      </label>
+    </div>
+    <div class="row">
+      <div class="lbl"><span>数字 左右</span><b id="c-num-offx-v">0</b></div>
+      <input type="range" id="c-num-offx" min="-60" max="60" step="1" value="0">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>数字 上下</span><b id="c-num-offy-v">0</b></div>
+      <input type="range" id="c-num-offy" min="-60" max="60" step="1" value="0">
     </div>
     <div class="row">
       <div class="lbl"><span>字体（本机已装）</span></div>
@@ -172,22 +194,8 @@
   </div>
 
   <div class="box">
-    <h2>位置微调（框内挪动）</h2>
-    <div class="row">
-      <div class="lbl"><span>左右</span><b id="c-offx-v">0</b></div>
-      <input type="range" id="c-offx" min="-40" max="40" step="1" value="0">
-    </div>
-    <div class="row">
-      <div class="lbl"><span>上下</span><b id="c-offy-v">0</b></div>
-      <input type="range" id="c-offy" min="-40" max="40" step="1" value="0">
-    </div>
-    <div class="row">
-      <button class="btn" id="c-reset" style="width:100%">一键复位（全部回中、间距归位）</button>
-    </div>
-  </div>
-
-  <div class="box">
     <h2>卡片</h2>
+    <div class="sub">玻璃底、不透明度、圆角、描边和底图都在这里</div>
     <div class="row">
       <label class="chk"><input type="checkbox" id="c-show-panel" checked> 显示玻璃面板</label>
     </div>
@@ -217,18 +225,28 @@
   </div>
 
   <div class="box">
-    <h2>右侧工作区</h2>
+    <h2>工作区</h2>
+    <div class="sub">数字右边那几行（BPM / 档位 / 设备 / 电量 / 程序时长），点开关才显示</div>
     <div class="chips">
       <button class="chip" id="t-unit" data-on="1">单位 BPM</button>
       <button class="chip" id="t-zone" data-on="1">档位名</button>
       <button class="chip" id="t-dev" data-on="1">设备信息</button>
       <button class="chip" id="t-batt" data-on="1">电量</button>
+      <button class="chip" id="t-uptime" data-on="0">程序时长</button>
     </div>
 
     <div class="pane" id="p-unit">
       <div class="row">
         <div class="lbl"><span>「BPM」字号</span><b id="c-unit-size-v">13</b></div>
         <input type="range" id="c-unit-size" min="6" max="60" step="1" value="13">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>「BPM」左右</span><b id="c-unit-offx-v">0</b></div>
+        <input type="range" id="c-unit-offx" min="-60" max="60" step="1" value="0">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>「BPM」上下</span><b id="c-unit-offy-v">0</b></div>
+        <input type="range" id="c-unit-offy" min="-60" max="60" step="1" value="0">
       </div>
     </div>
 
@@ -237,12 +255,28 @@
         <div class="lbl"><span>档位名字号</span><b id="c-zone-size-v">14</b></div>
         <input type="range" id="c-zone-size" min="6" max="60" step="1" value="14">
       </div>
+      <div class="row">
+        <div class="lbl"><span>档位名左右</span><b id="c-zone-offx-v">0</b></div>
+        <input type="range" id="c-zone-offx" min="-60" max="60" step="1" value="0">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>档位名上下</span><b id="c-zone-offy-v">0</b></div>
+        <input type="range" id="c-zone-offy" min="-60" max="60" step="1" value="0">
+      </div>
     </div>
 
     <div class="pane" id="p-dev">
       <div class="row">
         <div class="lbl"><span>设备字号</span><b id="c-dev-size-v">11</b></div>
         <input type="range" id="c-dev-size" min="6" max="60" step="1" value="11">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>设备名左右</span><b id="c-dev-offx-v">0</b></div>
+        <input type="range" id="c-dev-offx" min="-60" max="60" step="1" value="0">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>设备名上下</span><b id="c-dev-offy-v">0</b></div>
+        <input type="range" id="c-dev-offy" min="-60" max="60" step="1" value="0">
       </div>
       <div class="row">
         <div class="lbl"><span>设备名（留空 = 手环真名）</span></div>
@@ -270,6 +304,45 @@
           <option value="off">不显示数字</option>
         </select>
       </div>
+      <div class="row">
+        <div class="lbl"><span>电量左右</span><b id="c-batt-offx-v">0</b></div>
+        <input type="range" id="c-batt-offx" min="-60" max="60" step="1" value="0">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>电量上下</span><b id="c-batt-offy-v">0</b></div>
+        <input type="range" id="c-batt-offy" min="-60" max="60" step="1" value="0">
+      </div>
+    </div>
+
+    <div class="pane" id="p-uptime">
+      <div class="row">
+        <div class="lbl"><span>程序时长字号</span><b id="c-uptime-size-v">11</b></div>
+        <input type="range" id="c-uptime-size" min="6" max="60" step="1" value="11">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>前缀文字（留空 = 只显示数字）</span></div>
+        <input type="text" id="c-uptime-label" placeholder="例如：时长 / 直播 / 专注" maxlength="12">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>计时对象</span></div>
+        <select id="c-uptime-proc" style="flex:1"></select>
+        <button class="btn" id="c-uptime-refresh" title="重新扫一遍正在运行的程序">刷新</button>
+      </div>
+      <div class="row">
+        <input type="text" id="c-uptime-manual" placeholder="或手填 exe 名，例如 GenshinImpact.exe" style="flex:1">
+        <button class="btn" id="c-uptime-save">用这个</button>
+      </div>
+      <div class="lbl"><span>时长环满格（小时）</span><b id="c-uptime-hours-v">24</b></div>
+      <input type="range" id="c-uptime-hours" min="1" max="100" step="1" value="24">
+      <div class="row">
+        <div class="lbl"><span>程序时长左右</span><b id="c-uptime-offx-v">0</b></div>
+        <input type="range" id="c-uptime-offx" min="-60" max="60" step="1" value="0">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>程序时长上下</span><b id="c-uptime-offy-v">0</b></div>
+        <input type="range" id="c-uptime-offy" min="-60" max="60" step="1" value="0">
+      </div>
+      <div style="color:#6f7b8c;font-size:11px" id="c-uptime-hint">还没选计时对象</div>
     </div>
 
     <div class="pane">
@@ -287,7 +360,8 @@
   </div>
 
   <div class="box">
-    <h2>素材管理</h2>
+    <h2>素材</h2>
+    <div class="sub">图标、底图、分档用的 GIF 都放这里；上传后下拉里就能选</div>
     <div id="c-assets" style="max-height:200px;overflow:auto"></div>
   </div>
 
@@ -295,8 +369,24 @@
 
   <div id="skins" style="display:none">
     <div class="box">
-      <h2>皮肤（整套外观，不做 DIY 混搭）</h2>
-      <div class="sub" style="margin:0 0 8px">皮肤是另一套页面，OBS 里换源地址就能用；想微调就在 OBS 里放大缩小、加滤镜。</div>
+      <h2>程序识别</h2>
+      <div class="sub">皮肤里的「程序时长」用哪个程序计时，在这里选。和 DIY 那边是同一份设置，改哪边两边都变。</div>
+      <div class="row">
+        <div class="lbl"><span>计时对象</span></div>
+        <select id="c-sproc-proc" style="flex:1"></select>
+        <button class="btn" id="c-sproc-refresh" title="重新扫一遍正在运行的程序">刷新</button>
+      </div>
+      <div class="row">
+        <input type="text" id="c-sproc-manual" placeholder="或手填 exe 名，例如 GenshinImpact.exe" style="flex:1">
+        <button class="btn" id="c-sproc-save">用这个</button>
+      </div>
+      <div class="lbl"><span>时长环满格（小时）</span><b id="c-sproc-hours-v">24</b></div>
+      <input type="range" id="c-sproc-hours" min="1" max="100" step="1" value="24">
+      <div style="color:#6f7b8c;font-size:11px" id="c-sproc-hint">还没选计时对象</div>
+    </div>
+    <div class="box">
+      <h2>皮肤</h2>
+    <div class="sub">整套替换外观，不和 DIY 的选项混用。OBS 里换源地址就能用；想微调就在 OBS 里放大缩小、加滤镜。</div>
       <div id="c-skins"></div>
     </div>
   </div>
@@ -305,18 +395,24 @@
 <div id="stage">
   <div id="stageinner">
     <div id="stagebar">
-      <span>预览：</span><span class="nm" id="stageLabel">心率浮层</span>
+      <span>预览区</span>
       <span class="sp"></span>
-      <button class="btn" id="stage-home" title="回到 /overlay 浮层预览">回到浮层</button>
     </div>
     <div id="frameWrap"><iframe id="frame" src="/overlay" title="预览"></iframe></div>
+    <div id="skinWrap"><iframe id="skinFrame" title="皮肤预览"></iframe></div>
     <div id="hint">这里是实时预览（和 OBS 里一模一样的那一份渲染）；点皮肤卡片上的「效果预览」可以直接换成那套皮肤。</div>
+    <div id="stageEmpty">
+      <div class="se-t">皮肤是整套页面</div>
+      <div class="se-s">预览在左边每张卡片里。想放大看，点卡片上的「预览效果」或「新窗口预览」。</div>
+      <div class="se-url">OBS 里把源地址换成 <code>http://127.0.0.1:8787/skin/&lt;名字&gt;</code> 就能用这套皮肤。</div>
+    </div>
   </div>
 </div>
 
 <div id="statusbar">
   <span id="status">读取配置中…</span>
   <button class="btn" id="c-prev" title="用假心率/假电量/假时长看三个环的效果，再点一次关">预览效果</button>
+  <button class="btn" id="c-default" title="把 DIY 的外观恢复成出厂设置（只留图标 + 数字）">恢复默认</button>
   <button class="btn" id="c-reload">重新载入</button>
 </div>
 
@@ -394,7 +490,7 @@
   }
 
   function updatePanes() {
-    ['unit', 'zone', 'dev', 'batt'].forEach(function (k) {
+    ['unit', 'zone', 'dev', 'batt', 'uptime'].forEach(function (k) {
       var on = el('t-' + k).dataset.on === '1';
       var pane = el('p-' + k);
       if (pane) pane.style.display = on ? '' : 'none';
@@ -439,11 +535,17 @@
     el('tab-skin').classList.toggle('on', !diy);
     el('diy').style.display = diy ? '' : 'none';
     el('skins').style.display = diy ? 'none' : '';
+    // 两个预览视窗，切页签就换视窗
+    el('frameWrap').style.display = diy ? '' : 'none';
+    el('hint').style.display = diy ? '' : 'none';
+    el('skinWrap').style.display = diy ? 'none' : 'block';
+    el('stageEmpty').style.display = 'none';
     if (!diy) loadSkins();
   }
 
-  // ---- 右侧预览区：可以在「浮层」和任意一套「皮肤」之间切换 ----
+  // ---- 预览区：DIY 用 /overlay，皮肤用 /skin/xxx，切页签就换视窗 ----
   var stageNow = { src: '/overlay', title: '心率浮层', w: 680, h: 360 };
+  var skinNow = null;
 
   function fitStage() {
     var wrap = el('frameWrap'), fr = el('frame');
@@ -458,13 +560,25 @@
 
   function setStage(src, title, w, h) {
     stageNow = { src: src, title: title, w: w || 680, h: h || 360 };
-    el('stageLabel').textContent = title;
     fitStage();
     var fr = el('frame');
     fr.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
   }
 
-  window.addEventListener('resize', fitStage);
+  function fitSkin() {
+    // 皮肤页面自己会按窗口大小自适应，iframe 直接铺满 16:9 容器即可
+    var fr = el('skinFrame');
+    if (fr) fr.style.transform = '';
+  }
+
+  function setSkinStage(url, title) {
+    skinNow = { url: url, title: title || url };
+    var fr = el('skinFrame');
+    if (fr) fr.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+    if (el('skins').style.display === 'none') switchTab('skin');
+  }
+
+  window.addEventListener('resize', function () { fitStage(); fitSkin(); });
 
   function loadSkins() {
     var host = el('c-skins');
@@ -476,6 +590,15 @@
           return;
         }
         host.innerHTML = '';
+        if (!skinNow && list.length) {
+          skinNow = { url: list[0].url, title: list[0].title };
+        }
+        if (skinNow) {
+          var fr0 = el('skinFrame');
+          if (fr0 && !fr0.getAttribute('src')) {
+            fr0.src = skinNow.url + '?t=' + Date.now();
+          }
+        }
         list.forEach(function (s) {
           var url = location.origin + s.url;
           var d = document.createElement('div');
@@ -501,7 +624,7 @@
           b3.className = 'btn';
           b3.textContent = '效果预览';
           b3.title = '把右边这块预览区换成这套皮肤，不用开新窗口';
-          b3.onclick = function () { setStage(s.url, s.title, 1100, 430); status('预览已切到 ' + s.title, 'ok'); };
+          b3.onclick = function () { setSkinStage(s.url, s.title); status('预览已切到 ' + s.title, 'ok'); };
           ft.appendChild(b1); ft.appendChild(b3); ft.appendChild(b2);
           d.appendChild(ft);
           host.appendChild(d);
@@ -550,11 +673,15 @@
       theme: {
         icon: el('c-icon').value,
         icon_size: +el('c-icon-size').value,
+        beat_hz: +el('c-beat-hz').value,
         gap: +el('c-gap').value,
         num_size: +el('c-num-size').value,
+        num_auto: el('c-num-auto').checked,
         font: el('c-font').value,
-        offx: +el('c-offx').value,
-        offy: +el('c-offy').value,
+        icon_offx: +el('c-icon-offx').value,
+        icon_offy: +el('c-icon-offy').value,
+        num_offx: +el('c-num-offx').value,
+        num_offy: +el('c-num-offy').value,
         show_panel: el('c-show-panel').checked,
         panel_alpha: +el('c-panel-alpha').value,
         show_border: el('c-show-border').checked,
@@ -563,14 +690,27 @@
         bg_opacity: +el('c-bgop').value,
         unit_show: el('t-unit').dataset.on === '1',
         unit_size: +el('c-unit-size').value,
+        unit_offx: +el('c-unit-offx').value,
+        unit_offy: +el('c-unit-offy').value,
         show_zone: el('t-zone').dataset.on === '1',
         zone_size: +el('c-zone-size').value,
+        zone_offx: +el('c-zone-offx').value,
+        zone_offy: +el('c-zone-offy').value,
         show_device: el('t-dev').dataset.on === '1',
         dev_size: +el('c-dev-size').value,
+        dev_offx: +el('c-dev-offx').value,
+        dev_offy: +el('c-dev-offy').value,
         device_label: el('c-device-label').value,
         batt: el('t-batt').dataset.on === '1' ? el('c-batt').value : 'off',
         batt_size: +el('c-batt-size').value,
         batt_num: el('c-batt-num').value,
+        batt_offx: +el('c-batt-offx').value,
+        batt_offy: +el('c-batt-offy').value,
+        uptime_show: el('t-uptime').dataset.on === '1',
+        uptime_size: +el('c-uptime-size').value,
+        uptime_offx: +el('c-uptime-offx').value,
+        uptime_offy: +el('c-uptime-offy').value,
+        uptime_label: el('c-uptime-label').value,
         meta_gap: +el('c-meta-gap').value
       },
       zones: zones.map(function (z, i) {
@@ -612,9 +752,16 @@
     ['c-show-panel', 'c-show-border'].forEach(function (id) {
       el(id).addEventListener('change', scheduleSave);
     });
+    el('c-num-auto').addEventListener('change', function () {
+      var on = el('c-num-auto').checked;
+      el('c-num-size').disabled = on;
+      el('c-num-size-v').textContent = on ? '跟图标' : el('c-num-size').value;
+      scheduleSave();
+    });
     el('c-device-label').addEventListener('input', scheduleSave);
+    el('c-uptime-label').addEventListener('input', scheduleSave);
 
-    ['t-unit', 't-zone', 't-dev', 't-batt'].forEach(function (id) {
+    ['t-unit', 't-zone', 't-dev', 't-batt', 't-uptime'].forEach(function (id) {
       el(id).onclick = function () {
         setChip(el(id), el(id).dataset.on !== '1');
         updatePanes();
@@ -622,13 +769,42 @@
       };
     });
 
-    el('c-reset').onclick = function () {
-      el('c-offx').value = 0; el('c-offx-v').textContent = '0';
-      el('c-offy').value = 0; el('c-offy-v').textContent = '0';
-      el('c-gap').value = 14; el('c-gap-v').textContent = '14';
-      el('c-meta-gap').value = 4; el('c-meta-gap-v').textContent = '4';
-      scheduleSave();
-      status('已复位', 'ok');
+    ['c-icon-offx', 'c-icon-offy', 'c-num-offx', 'c-num-offy'].forEach(function (id) {
+      el(id).addEventListener('input', scheduleSave);
+    });
+
+
+    // ---- 恢复默认：整份 theme 换成出厂值 ----
+    // 优先问服务端；老版本服务没有这条路由时用下面这份兜底，两边保持一致
+    var FALLBACK_THEME = {
+      icon: '', icon_size: 55, beat_hz: 0, gap: 14, gap_right: 18,
+      icon_offx: 0, icon_offy: 0, num_offx: 0, num_offy: 0,
+      bg: '', bg_opacity: 0.9, panel_alpha: 0.55,
+      show_panel: false, show_border: false, radius: 40,
+      num_size: 75, num_auto: true, font: 'Segoe UI', meta_gap: 4,
+      unit_show: false, unit_size: 13, unit_offx: 0, unit_offy: 0,
+      show_zone: false, zone_size: 14, zone_offx: 0, zone_offy: 0,
+      show_device: false, dev_size: 11, dev_offx: 0, dev_offy: 0, device_label: '',
+      uptime_show: false, uptime_size: 11, uptime_offx: 0, uptime_offy: 0, uptime_label: '时长',
+      batt: 'off', batt_size: 22, batt_num: 'in', batt_offx: 0, batt_offy: 0
+    };
+    el('c-default').onclick = function () {
+      status('正在恢复…');
+      fetch('/api/default-theme', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+        .then(function (d) {
+          var th = (d && (d.theme || d)) || FALLBACK_THEME;
+          return fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme: th })
+          });
+        })
+        .then(function (r) { return r.json(); })
+        .then(function () { return refreshAll(); })
+        .then(function () { status('已恢复默认外观（只留图标 + 数字）', 'ok'); })
+        .catch(function (e) { status('恢复默认失败: ' + e, 'err'); });
     };
 
     el('c-icon-up').onclick = function () { el('c-icon-file').click(); };
@@ -678,9 +854,6 @@
       refreshAll();
     };
 
-    el('stage-home').onclick = function () {
-      setStage('/overlay', '心率浮层', 680, 360);
-    };
     fitStage();
 
     fetch('/api/preview', { cache: 'no-store' })
@@ -719,16 +892,28 @@
                                   { value: 'out', label: '放在图标右边' },
                                   { value: 'off', label: '不显示数字' }], t.batt_num || 'in', null);
 
-    numberRow('c-icon-size', t.icon_size == null ? 42 : t.icon_size);
+    numberRow('c-icon-size', t.icon_size == null ? 55 : t.icon_size);
+    numberRow('c-beat-hz', t.beat_hz == null ? 0 : t.beat_hz,
+      function (v) { return +v <= 0 ? '关' : (+v).toFixed(1) + ' 次/秒'; });
     numberRow('c-gap', t.gap == null ? 14 : t.gap);
-    numberRow('c-num-size', t.num_size == null ? 60 : t.num_size);
-    numberRow('c-offx', t.offx || 0);
-    numberRow('c-offy', t.offy || 0);
+    numberRow('c-num-size', t.num_size == null ? 75 : t.num_size);
+    el('c-num-auto').checked = t.num_auto !== false;
+    el('c-num-size').disabled = el('c-num-auto').checked;
+    el('c-num-size-v').textContent = el('c-num-auto').checked ? '跟图标' : el('c-num-size').value;
+    numberRow('c-icon-offx', t.icon_offx || 0);
+    numberRow('c-icon-offy', t.icon_offy || 0);
+    numberRow('c-num-offx', t.num_offx || 0);
+    numberRow('c-num-offy', t.num_offy || 0);
     numberRow('c-radius', t.radius == null ? 40 : t.radius);
     numberRow('c-unit-size', t.unit_size == null ? 13 : t.unit_size);
     numberRow('c-zone-size', t.zone_size == null ? 14 : t.zone_size);
     numberRow('c-dev-size', t.dev_size == null ? 11 : t.dev_size);
+    numberRow('c-uptime-size', t.uptime_size == null ? 11 : t.uptime_size);
     numberRow('c-batt-size', t.batt_size == null ? 22 : t.batt_size);
+    ['unit', 'zone', 'dev', 'uptime', 'batt'].forEach(function (k) {
+      numberRow('c-' + k + '-offx', t[k + '_offx'] || 0);
+      numberRow('c-' + k + '-offy', t[k + '_offy'] || 0);
+    });
     numberRow('c-meta-gap', t.meta_gap == null ? 4 : t.meta_gap);
     ratioRow('c-panel-alpha', t.panel_alpha == null ? 0.55 : t.panel_alpha);
     ratioRow('c-bgop', t.bg_opacity == null ? 0.9 : t.bg_opacity);
@@ -736,11 +921,13 @@
     el('c-show-panel').checked = t.show_panel !== false;
     el('c-show-border').checked = t.show_border !== false;
     el('c-device-label').value = t.device_label || '';
+    el('c-uptime-label').value = (t.uptime_label == null ? '时长' : t.uptime_label);
 
     setChip(el('t-unit'), t.unit_show !== false);
     setChip(el('t-zone'), t.show_zone !== false);
     setChip(el('t-dev'), t.show_device !== false);
     setChip(el('t-batt'), t.batt !== 'off');
+    setChip(el('t-uptime'), t.uptime_show === true);
     updatePanes();
 
     buildZones();
@@ -770,11 +957,15 @@
     .then(function () { status('就绪', 'ok'); })
     .catch(function (e) { status('读取失败: ' + e, 'err'); });
 
-  // ── 游戏计时：下拉选运行中的进程（A）+ 手填 exe 名（C） ──
+  // ── 程序计时：下拉选运行中的进程 + 手填 exe 名（都在工作区的「程序时长」面板里） ──
   (function gameUI() {
-    var sel = el('c-game-proc'), hint = el('c-game-hint');
-    var hoursEl = el('c-game-hours'), hoursV = el('c-game-hours-v');
-    var manual = el('c-game-manual');
+    // DIY 的「程序时长」和皮肤页的「程序识别」是同一份设置，两边控件一起更新
+    var sels = [el('c-uptime-proc'), el('c-sproc-proc')].filter(Boolean);
+    var hints = [el('c-uptime-hint'), el('c-sproc-hint')].filter(Boolean);
+    var hourEls = [el('c-uptime-hours'), el('c-sproc-hours')].filter(Boolean);
+    var hourVs = [el('c-uptime-hours-v'), el('c-sproc-hours-v')].filter(Boolean);
+    var manuals = [el('c-uptime-manual'), el('c-sproc-manual')].filter(Boolean);
+    var sel = sels[0], manual = manuals[0], hoursEl = hourEls[0];
 
     function fillList(force) {
       fetch('/api/processes' + (force ? '?force=1' : ''), { cache: 'no-store' })
@@ -790,28 +981,40 @@
             opts.push('<option value="' + p.name.replace(/"/g, '&quot;') + '">' +
                       label.replace(/</g, '&lt;') + '</option>');
           });
-          sel.innerHTML = opts.join('');
-          if (cfg && cfg.game && cfg.game.process) sel.value = cfg.game.process;
+          sels.forEach(function (s) {
+            s.innerHTML = opts.join('');
+            if (cfg && cfg.game && cfg.game.process) s.value = cfg.game.process;
+          });
         })
-        .catch(function () { sel.innerHTML = '<option value="">（读不到进程列表）</option>'; });
+        .catch(function () {
+          sels.forEach(function (s) { s.innerHTML = '<option value="">（读不到进程列表）</option>'; });
+        });
     }
 
     function paintGame(st) {
       if (!st) return;
-      hoursEl.value = st.ring_hours || 4;
-      hoursV.textContent = (st.ring_hours || 4);
-      if (st.process) {
-        var t = st.running ? ('运行中 ' + Math.floor((st.elapsed || 0) / 60) + ' 分钟') : '未运行';
-        hint.textContent = '当前：' + st.process + ' · ' + t;
-        hint.style.color = st.running ? '#74e6a2' : '#6f7b8c';
+      var rh = st.ring_hours || 24;
+      hourEls.forEach(function (h) { h.value = rh; });
+      hourVs.forEach(function (h) { h.textContent = rh; });
+      var text, color;
+      if (!st.process) {
+        text = '还没选计时对象：上面选一个正在跑的程序，或者手填 exe 名。';
+        color = '#e0b05a';
+      } else if (!st.running) {
+        text = '计时对象：' + st.process + '（现在没在运行，浮层会先隐藏时长）';
+        color = '#6f7b8c';
       } else {
-        hint.textContent = '当前：未选';
-        hint.style.color = '#6f7b8c';
+        text = '计时对象：' + st.process + ' · 已运行 ' +
+          Math.floor((st.elapsed || 0) / 60) + ' 分钟（满格 ' + rh + ' 小时）';
+        color = '#74e6a2';
       }
+      hints.forEach(function (h) { h.textContent = text; h.style.color = color; });
     }
 
-    function saveGame(proc) {
-      var body = { process: proc, ring_hours: Number(hoursEl.value) || 4 };
+    function saveGame(proc, hours) {
+      var hv = Number(hours == null ? hoursEl.value : hours);
+      if (!hv || hv < 1) hv = 24;
+      var body = { process: proc, ring_hours: hv };
       fetch('/api/game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -819,19 +1022,39 @@
       }).then(function (r) { return r.json(); })
         .then(function (st) {
           if (cfg) cfg.game = { process: st.process, ring_hours: st.ring_hours };
+          manuals.forEach(function (m) { if (st.process) m.value = st.process; });
+          sels.forEach(function (s) { s.value = st.process || ''; });
+          hourEls.forEach(function (h) { h.value = st.ring_hours; });
+          hourVs.forEach(function (v) { v.textContent = st.ring_hours; });
           paintGame(st);
-          status(proc ? ('游戏计时 → ' + proc) : '游戏计时已清空', 'ok');
+          status(proc ? ('程序计时 → ' + proc) : '程序计时已清空', 'ok');
         })
-        .catch(function () { status('游戏计时没保存上', 'err'); });
+        .catch(function () { status('程序计时没保存上', 'err'); });
     }
 
-    el('c-game-refresh').onclick = function () { fillList(true); status('已刷新进程列表', 'ok'); };
-    sel.onchange = function () { if (sel.value) { manual.value = sel.value; saveGame(sel.value); } };
-    el('c-game-save').onclick = function () {
-      saveGame((manual.value || '').trim());
-    };
-    hoursEl.oninput = function () { hoursV.textContent = hoursEl.value; };
-    hoursEl.onchange = function () { saveGame((cfg && cfg.game && cfg.game.process) || (manual.value || '').trim()); };
+    sels.forEach(function (s) {
+      s.onchange = function () {
+        if (!s.value) return;
+        manuals.forEach(function (m) { m.value = s.value; });
+        saveGame(s.value);
+      };
+    });
+    ['c-uptime-refresh', 'c-sproc-refresh'].forEach(function (id) {
+      var b = el(id); if (b) b.onclick = function () { fillList(true); status('已刷新进程列表', 'ok'); };
+    });
+    ['c-uptime-save', 'c-sproc-save'].forEach(function (id) {
+      var b = el(id); if (b) b.onclick = function () { saveGame((manual.value || '').trim()); };
+    });
+    hourEls.forEach(function (h, i) {
+      h.oninput = function () {
+        // 两边滑块联动：拖哪边，另一边和两个读数都跟着走
+        hourEls.forEach(function (o) { o.value = h.value; });
+        hourVs.forEach(function (v) { v.textContent = h.value; });
+      };
+      h.onchange = function () {
+        saveGame((cfg && cfg.game && cfg.game.process) || (manual.value || '').trim(), h.value);
+      };
+    });
 
     fillList(false);
     fetch('/api/game', { cache: 'no-store' })
@@ -839,7 +1062,7 @@
       .then(function (st) {
         if (cfg) cfg.game = { process: st.process, ring_hours: st.ring_hours };
         paintGame(st);
-        if (st.process) manual.value = st.process;
+        if (st.process) manuals.forEach(function (m) { m.value = st.process; });
       })
       .catch(function () {});
   })();

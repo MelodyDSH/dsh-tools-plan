@@ -16,6 +16,21 @@ if not defined PY (
 set "PYTHONIOENCODING=utf-8"
 if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
 
+%PY% -c "import bleak" >nul 2>nul
+if errorlevel 1 (
+  echo [.] First run: installing dependencies, please wait...
+  %PY% -m pip install --disable-pip-version-check -q -r requirements.txt
+  if errorlevel 1 (
+    echo.
+    echo [x] Failed to install dependencies.
+    echo     Check your network, then run this in this folder:
+    echo         %PY% -m pip install -r requirements.txt
+    pause
+    exit /b 1
+  )
+  echo [.] Dependencies installed.
+)
+
 echo Starting: desktop heart-rate window
 %PY% hr_window.py
 echo.

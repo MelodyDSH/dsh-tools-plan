@@ -1,4 +1,4 @@
-"""game_watch.py — 用「进程启动时间」算游戏玩了多久（Windows，纯 ctypes，不依赖 psutil）
+"""game_watch.py — 用「进程启动时间」算一个程序跑了多久（Windows，纯 ctypes，不依赖 psutil）
 
 思路：
   ／：不自己累加计时，直接问系统「这个进程什么时候起来的」，now - 创建时间 = 已运行时长。
@@ -65,7 +65,7 @@ def proc_start_time(pid):
 
 
 def _window_titles():
-    """pid → 第一个可见窗口标题（用来在设置台里认出「这是游戏」）。"""
+    """pid → 第一个可见窗口标题（用来在设置台里认出「这是哪个程序」）。"""
     out = {}
 
     @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -152,7 +152,7 @@ def game_status(cfg):
     game = (cfg or {}).get("game") or {}
     name = (game.get("process") or "").strip()
     try:
-        ring = float(game.get("ring_hours") or 4)
+        ring = float(game.get("ring_hours") or 24)
     except Exception:
         ring = 4.0
     st = {
@@ -179,4 +179,4 @@ def game_status(cfg):
 if __name__ == "__main__":
     import json
     print(json.dumps(list_processes(), ensure_ascii=False, indent=1)[:1200])
-    print(json.dumps(game_status({"game": {"process": "", "ring_hours": 4}}), ensure_ascii=False))
+    print(json.dumps(game_status({"game": {"process": "", "ring_hours": 24}}), ensure_ascii=False))

@@ -12,9 +12,10 @@
   #badge {
     position: absolute; top: 50%; left: 50%;
     transform: translate(calc(-50% + var(--shift, 0px)), -50%);
-    display: flex; align-items: center;
+    display: flex; align-items: flex-end;
     gap: var(--gap-right, 18px);
-    padding: var(--pad, 10px 20px);
+    /* 四向内边距：定死（使用者 2026-11-10 调好的值），不再提供滑杆 */
+    padding: 17px 29px 30px 17px;
     border-radius: var(--radius, 40px);
     background: var(--panel, rgba(12,14,20,.55));
     border: 1px solid var(--border-color, rgba(255,255,255,.14));
@@ -23,10 +24,9 @@
     -webkit-backdrop-filter: var(--blur, blur(8px));
     transition: background-color .12s linear, border-radius .12s linear;
   }
+  /* 关掉玻璃面板只去掉「底色 + 模糊」，描边和投影归 .no-border 管，别一起干掉 */
   #badge.no-panel {
     background: transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
@@ -41,14 +41,14 @@
   /* 左组：图标 + 数字（间距只影响这一组） */
   #left {
     position: relative; z-index: 1;
-    display: flex; align-items: center;
+    display: flex; align-items: flex-end;
     gap: var(--gap, 14px);
-    transform: translate(var(--offx, 0px), var(--offy, 0px));
   }
   #iconwrap {
-    width: var(--iconsize, 42px); height: var(--iconsize, 42px);
+    width: var(--iconsize, 55px); height: var(--iconsize, 55px);
     flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
     transform-origin: center;
+    translate: var(--icon-offx, 0px) calc(var(--icon-offy, 0px) + var(--icon-base, 0px));
   }
   #iconwrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
   #iconwrap svg { width: 100%; height: 100%; display: block; }
@@ -63,23 +63,34 @@
   @media (prefers-reduced-motion: reduce) { #iconwrap.beat { animation: none; } }
 
   #num {
-    font-size: var(--numsize, 60px); font-weight: 800; line-height: 1;
+    font-size: var(--numsize, 75px); font-weight: 800; line-height: 1;
     color: var(--zone-color, #43d17c);
     font-variant-numeric: tabular-nums;
     text-shadow: 0 2px 10px rgba(0,0,0,.35);
+    /* 字形底比盒子底高一个降部，往下沉一点点，才能和图标底边平齐 */
+    translate: var(--num-offx, 0px) calc(var(--num-offy, 0px) + var(--num-base, .24em));
   }
 
-  /* 右组：独立工作区，垂直居中，各项之间等距（2 项对称、3 项中间居中） */
+  /* 右组：独立工作区，整块以下水平线为基准往上长，各项之间等距 */
   #meta {
     position: relative; z-index: 1;
     display: flex; flex-direction: column;
-    justify-content: center; align-items: flex-start;
+    justify-content: flex-end; align-items: flex-start;
     gap: var(--metagap, 4px);
     line-height: 1.15;
   }
+  /* 每一项都能单独挪，并且默认都把「文字笔迹底」压在同一条下水平线上 */
+  #unit { translate: var(--unit-offx, 0px) calc(var(--unit-offy, 0px) + var(--unit-base, 0px)); }
+  #zone { translate: var(--zone-offx, 0px) calc(var(--zone-offy, 0px) + var(--zone-base, 0px)); }
+  #dev { translate: var(--dev-offx, 0px) calc(var(--dev-offy, 0px) + var(--dev-base, 0px)); }
+  #uptime { translate: var(--uptime-offx, 0px) calc(var(--uptime-offy, 0px) + var(--uptime-base, 0px)); }
+  #battrow { translate: var(--batt-offx, 0px) calc(var(--batt-offy, 0px) + var(--batt-base, 0px)); }
   #unit { font-size: var(--unit-size, 13px); letter-spacing: .14em; color: rgba(255,255,255,.62); }
   #zone { font-size: var(--zone-size, 14px); font-weight: 600; color: var(--zone-color, #43d17c); }
   #dev { font-size: var(--dev-size, 11px); color: rgba(255,255,255,.55); white-space: nowrap; }
+  #uptime { font-size: var(--uptime-size, 11px); color: rgba(255,255,255,.55); white-space: nowrap;
+            font-variant-numeric: tabular-nums; }
+  #uptime b { font-weight: 500; color: rgba(255,255,255,.82); }
   #battrow { display: flex; align-items: center; gap: 4px; }
   #battrow svg { display: block; }
   #batttext { font-size: calc(var(--batt-size, 22px) * 0.62); color: rgba(255,255,255,.78); font-variant-numeric: tabular-nums; }
@@ -87,6 +98,12 @@
   .hide { display: none !important; }
 
   body.bar #badge { border-radius: var(--radius, 10px); }
+
+  /* 桌面小窗模式：浏览器 --app 打开的窗口没有"透明"，这里铺一层深色圆角底，避免白边 */
+  body.mini { background: #07090f; }
+  body.mini #wrap { padding: 8px; }
+  body.mini #badge { border-radius: 16px; background: rgba(12, 16, 24, .92);
+    box-shadow: inset 0 0 0 1px rgba(120, 160, 200, .10); }
 </style>
 </head>
 <body>
@@ -109,6 +126,7 @@
       <div id="unit">BPM</div>
       <div id="zone" class="hide">--</div>
       <div id="dev" class="hide"></div>
+      <div id="uptime" class="hide"></div>
       <div id="battrow" class="hide"></div>
     </div>
   </div>
@@ -120,15 +138,18 @@
   var badge = el('badge'), bg = el('bgimg'), num = el('num'),
       heart = el('heart'), img = el('iconimg'), wrap = el('iconwrap'),
       zoneEl = el('zone'), devEl = el('dev'),
-      battRow = el('battrow');
+      battRow = el('battrow'), upEl = el('uptime');
 
   var theme = {};
+  var game = null;   // /api/game 的最新结果（程序运行时长）
+  var gameAt = 0;    // 上面这份数据取回时的本地时间，用来把秒数往下推
   var curIcon = null, curBg = null, curBgRev = -1;
   var fetchedRev = -1;
 
   var qs = new URLSearchParams(location.search);
   var forceGif = qs.get('gif') || '';
   if (qs.get('mode') === 'bar') document.body.classList.add('bar');
+  if (qs.get('mini')) document.body.classList.add('mini');
 
   function rgba(hex, alpha) {
     var s = String(hex || '#0c0e14').trim();
@@ -202,6 +223,120 @@
       '</svg>';
   }
 
+  // ---- 程序时长（/api/game）：和皮肤里的「时长环」用的是同一个数据源 ----
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return h > 0 ? h + ':' + p(m) + ':' + p(s) : m + ':' + p(s);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function paintUptime(t) {
+    t = t || theme || {};
+    var on = t.uptime_show === true;
+    var g = game;
+    if (!on || !g || !g.process || !g.running || !g.elapsed) {
+      upEl.classList.add('hide');
+      upEl.innerHTML = '';
+      syncMeta();
+      return;
+    }
+    var lab = (t.uptime_label == null ? '时长' : String(t.uptime_label)).trim();
+    upEl.innerHTML = (lab ? '<span>' + esc(lab) + '</span> ' : '') + '<b>' + fmtDur(g.elapsed + (gameAt ? (Date.now() - gameAt) / 1000 : 0)) + '</b>';
+    upEl.classList.remove('hide');
+    syncMeta();
+  }
+
+  function syncMeta() {
+    var any = !el('unit').classList.contains('hide') ||
+              !zoneEl.classList.contains('hide') ||
+              !devEl.classList.contains('hide') ||
+              !battRow.classList.contains('hide') ||
+              !upEl.classList.contains('hide');
+    el('meta').classList.toggle('hide', !any);
+  }
+
+  // 让数字和图标「等高 + 底面平齐」：按图标真实画出的大小和当前字体的字形量出来算，
+  // 不靠猜 em 系数。num_auto 为真时字号也跟着图标走。
+  var measureCtx = null;
+
+  function inkHeightOfIcon(box) {
+    var iw = el('iconwrap');
+    if (!iw) return box;
+    var svg = iw.querySelector('svg');
+    if (svg && svg.getBBox) {
+      try {
+        var b = svg.getBBox();
+        var vb = svg.viewBox && svg.viewBox.baseVal;
+        if (b.height > 0 && vb && vb.height > 0) return box * (b.height / vb.height);
+      } catch (e) { /* 有些浏览器对隐藏的 svg 抛错，忽略 */ }
+    }
+    var img = iw.querySelector('img');
+    if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      var s = Math.min(box / img.naturalWidth, box / img.naturalHeight);
+      return img.naturalHeight * s;
+    }
+    return box;
+  }
+
+  function fitNumber(t) {
+    var r = document.documentElement.style;
+    var iconBox = (t.icon_size == null ? 55 : +t.icon_size);
+    r.setProperty('--iconsize', iconBox + 'px');
+    if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+    var fam = '"' + (t.font || 'Segoe UI').replace(/"/g, '') + '", "Microsoft YaHei", sans-serif';
+    measureCtx.font = '800 100px ' + fam;
+    var m = measureCtx.measureText('8');
+    var g100 = (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0);
+    if (!g100) { r.setProperty('--numsize', (t.num_size || 75) + 'px'); return; }
+
+    var ink = inkHeightOfIcon(iconBox);
+    var size = (t.num_auto === false && t.num_size ? +t.num_size : 100 * ink / g100);
+    r.setProperty('--numsize', size.toFixed(1) + 'px');
+
+    // 图标盒子里没画满的那部分要补掉：图之所以看起来偏高，就是盒子底比它自己的笔迹底还低
+    r.setProperty('--icon-base', Math.max(0, (iconBox - ink) / 2).toFixed(1) + 'px');
+
+    // line-height:1 时，盒子底到基线的距离 = (F - 上沿 + 下沿) / 2，再减掉字形自己沉下去的深度
+    measureCtx.font = '800 ' + size.toFixed(1) + 'px ' + fam;
+    var mm = measureCtx.measureText('8');
+    var fbA = mm.fontBoundingBoxAscent || m.fontBoundingBoxAscent || 0;
+    var fbD = mm.fontBoundingBoxDescent || m.fontBoundingBoxDescent || 0;
+    var abd = mm.actualBoundingBoxDescent || 0;
+    var shift = (size - fbA + fbD) / 2 - abd;
+    if (!isFinite(shift)) shift = size * 0.24;
+    r.setProperty('--num-base', shift.toFixed(1) + 'px');
+
+    // 只影响「框」：数字盒子上沿到墨迹之间还剩多少空白，交给使用者用「框内边距」自己调，
+    // 这里只把测量值暴露出来备用，不再自动改布局。
+    var asc = mm.actualBoundingBoxAscent || 0;
+    var inkTop = (size - fbA + fbD) / 2 + fbA - asc;
+    var inkGap = Math.max(0, inkTop - shift);
+    r.setProperty('--ink-gap', inkGap.toFixed(1) + 'px');
+
+    // 工作区那几项字号不同，各自补各自的降部，才能全部压在同一条下水平线上
+    [['unit', t.unit_size == null ? 13 : t.unit_size],
+     ['zone', t.zone_size == null ? 14 : t.zone_size],
+     ['dev', t.dev_size == null ? 11 : t.dev_size],
+     ['uptime', t.uptime_size == null ? 11 : t.uptime_size]].forEach(function (p) {
+      var fs = +p[1];
+      measureCtx.font = '400 ' + fs + 'px ' + fam;
+      var q = measureCtx.measureText('Ag');
+      var qA = q.fontBoundingBoxAscent || 0;
+      var qD = q.fontBoundingBoxDescent || 0;
+      var qd = q.actualBoundingBoxDescent || 0;
+      var b = (fs - qA + qD) / 2 - qd;
+      if (!isFinite(b)) b = fs * 0.2;
+      r.setProperty('--' + p[0] + '-base', b.toFixed(1) + 'px');
+    });
+  }
+
   function applyTheme(t, rev, ver) {
     if (!t) return;
     theme = t;
@@ -212,16 +347,23 @@
     // 间距变大时整块往左让一半，卡片右缘（右侧工作区）就钉住不动
     r.setProperty('--shift', (14 - gap) / 2 + 'px');
     r.setProperty('--gap-right', (t.gap_right == null ? 18 : +t.gap_right) + 'px');
-    r.setProperty('--offx', (t.offx || 0) + 'px');
-    r.setProperty('--offy', (t.offy || 0) + 'px');
+    r.setProperty('--icon-offx', (t.icon_offx || 0) + 'px');
+    r.setProperty('--icon-offy', (t.icon_offy || 0) + 'px');
+    r.setProperty('--num-offx', (t.num_offx || 0) + 'px');
+    r.setProperty('--num-offy', (t.num_offy || 0) + 'px');
     r.setProperty('--radius', (+t.radius >= 60 ? '999px' : (t.radius == null ? 40 : +t.radius) + 'px'));
-    r.setProperty('--numsize', (t.num_size == null ? 60 : t.num_size) + 'px');
-    r.setProperty('--iconsize', (t.icon_size == null ? 42 : t.icon_size) + 'px');
+    r.setProperty('--iconsize', (t.icon_size == null ? 55 : t.icon_size) + 'px');
+    fitNumber(t);
     r.setProperty('--unit-size', (t.unit_size == null ? 13 : t.unit_size) + 'px');
     r.setProperty('--zone-size', (t.zone_size == null ? 14 : t.zone_size) + 'px');
     r.setProperty('--dev-size', (t.dev_size == null ? 11 : t.dev_size) + 'px');
+    r.setProperty('--uptime-size', (t.uptime_size == null ? 11 : t.uptime_size) + 'px');
     r.setProperty('--batt-size', (t.batt_size == null ? 22 : t.batt_size) + 'px');
     r.setProperty('--metagap', (t.meta_gap == null ? 4 : t.meta_gap) + 'px');
+    ['unit', 'zone', 'dev', 'uptime', 'batt'].forEach(function (k) {
+      r.setProperty('--' + k + '-offx', (t[k + '_offx'] || 0) + 'px');
+      r.setProperty('--' + k + '-offy', (t[k + '_offy'] || 0) + 'px');
+    });
     var font = (t.font || 'Segoe UI').replace(/"/g, '');
     document.body.style.fontFamily = '"' + font + '", "Microsoft YaHei", sans-serif';
 
@@ -231,10 +373,8 @@
     badge.classList.toggle('no-border', t.show_border === false);
     r.setProperty('--panel', showPanel ? rgba(t.panel_bg || '#0c0e14', alpha) : 'transparent');
     r.setProperty('--border-color', t.show_border === false ? 'transparent' : 'rgba(255,255,255,.14)');
-    r.setProperty('--shadow', (showPanel && t.show_border !== false) ? '0 8px 28px rgba(0,0,0,.35)' : 'none');
+    r.setProperty('--shadow', t.show_border === false ? 'none' : '0 8px 28px rgba(0,0,0,.35)');
     r.setProperty('--blur', (showPanel && alpha < 0.98) ? 'blur(8px)' : 'none');
-    // 关掉面板时留一点内边距，避免边缘把字切掉
-    r.setProperty('--pad', showPanel ? '10px 20px' : '2px 4px');
 
     el('unit').classList.toggle('hide', t.unit_show === false);
     zoneEl.classList.toggle('hide', t.show_zone === false);
@@ -257,11 +397,15 @@
 
     if (d.bpm) {
       num.textContent = d.bpm;
-      var period = Math.max(0.45, Math.min(2.0, 60 / d.bpm));
-      document.documentElement.style.setProperty('--beat', period.toFixed(2) + 's');
-      wrap.classList.add('beat');
     } else {
       num.textContent = '--';
+    }
+    // 跳动频率：0 = 不跳（GIF 自己会动）；否则按设定的「每秒几次」跑
+    var hz = t.beat_hz == null ? 0 : +t.beat_hz;
+    if (hz > 0 && d.bpm) {
+      document.documentElement.style.setProperty('--beat', (1 / hz).toFixed(2) + 's');
+      wrap.classList.add('beat');
+    } else {
       wrap.classList.remove('beat');
     }
 
@@ -284,6 +428,7 @@
     var anyMeta = (t.unit_show !== false) || (t.show_zone !== false) ||
                   (t.show_device !== false) || showBatt;
     el('meta').classList.toggle('hide', !anyMeta);
+    paintUptime(t);
 
     var wantIcon = (z.icon || '').trim() ? z.icon : (t.icon || '');
     setIcon(wantIcon, ver[wantIcon] || 0);
@@ -309,6 +454,17 @@
     .catch(function () { setTimeout(poll, 1500); });
 
   setInterval(poll, 3000);
+
+  function pollGame() {
+    fetch('/api/game', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (g) { game = g; gameAt = Date.now(); paintUptime(theme); })
+      .catch(function () {});
+  }
+  pollGame();
+  setInterval(pollGame, 10000);
+  // 秒数本地递推，不必等下一次拉取
+  setInterval(function () { if (game) paintUptime(theme); }, 1000);
 })();
 </script>
 </body>

@@ -46,35 +46,52 @@ DEFAULT_CFG = {
     },
     "theme": {
         "icon": "",
-        "icon_size": 42,
+        "icon_size": 55,
+        "beat_hz": 0.0,
         "gap": 14,
         "gap_right": 18,
-        "offx": 0,
-        "offy": 0,
+        "icon_offx": 0,
+        "icon_offy": 0,
+        "num_offx": 0,
+        "num_offy": 0,
         "bg": "",
         "bg_opacity": 0.9,
         "panel_alpha": 0.55,
-        "show_panel": True,
-        "show_border": True,
+        "show_panel": False,
+        "show_border": False,
         "radius": 40,
-        "num_size": 60,
+        "num_size": 75,
+        "num_auto": True,
         "font": "Segoe UI",
         "meta_gap": 4,
-        "unit_show": True,
+        "unit_show": False,
         "unit_size": 13,
-        "show_zone": True,
+        "unit_offx": 0,
+        "unit_offy": 0,
+        "show_zone": False,
         "zone_size": 14,
-        "show_device": True,
+        "zone_offx": 0,
+        "zone_offy": 0,
+        "show_device": False,
         "dev_size": 11,
+        "dev_offx": 0,
+        "dev_offy": 0,
         "device_label": "",
-        "batt": "ring",
+        "uptime_show": False,
+        "uptime_size": 11,
+        "uptime_offx": 0,
+        "uptime_offy": 0,
+        "uptime_label": "时长",
+        "batt": "off",
         "batt_size": 22,
         "batt_num": "in",
+        "batt_offx": 0,
+        "batt_offy": 0,
         "rev": 0,
     },
     "game": {
         "process": "",
-        "ring_hours": 4.0,
+        "ring_hours": 24.0,
     },
     "zones": [
         {"name": "很低", "min": 0, "max": 50, "color": "#4ea1ff", "icon": "", "gif": ""},
@@ -104,6 +121,15 @@ def load_cfg():
                     th["batt"] = th.pop("battery")
                 else:
                     th.pop("battery", None)
+            # 老配置兼容：1.3 之前图标和数字共用 offx/offy，现在各挪各的
+            if "offx" in th:
+                if "icon_offx" not in th:
+                    th["icon_offx"] = th.get("offx") or 0
+                th.pop("offx", None)
+            if "offy" in th:
+                if "icon_offy" not in th:
+                    th["icon_offy"] = th.get("offy") or 0
+                th.pop("offy", None)
             return merged
         except Exception as exc:
             log("配置读不了，用默认值:", exc)
@@ -264,7 +290,7 @@ def preview_game(cfg):
     if not PREVIEW["on"]:
         return None
     g = cfg.get("game") or {}
-    ring_h = float(g.get("ring_hours") or 4.0)
+    ring_h = float(g.get("ring_hours") or 24.0)
     span = max(60.0, ring_h * 3600.0)
     t = time.time() - PREVIEW["started"]
     elapsed = int((t * 60) % span)        # 1 秒真时间走 1 分钟假时长，10 分钟走满一圈
@@ -568,6 +594,12 @@ class HRService:
             await self.respond(writer, 200, "application/json; charset=utf-8",
                                json.dumps(list_fonts(), ensure_ascii=False).encode("utf-8"),
                                no_cache=True)
+        elif path == "/api/default-theme":
+            # 设置页的「恢复默认」用这份，和代码里的出厂值保持同一处定义
+            body = {"theme": json.loads(json.dumps(DEFAULT_CFG["theme"]))}
+            await self.respond(writer, 200, "application/json; charset=utf-8",
+                               json.dumps(body, ensure_ascii=False).encode("utf-8"),
+                               no_cache=True)
         elif path == "/health":
             await self.respond(writer, 200, "text/plain", b"ok")
         elif path in ("/skins", "/api/skins"):
@@ -626,7 +658,7 @@ class HRService:
             except Exception as exc:
                 await self.respond(writer, 400, "text/plain", f"bad json: {exc}".encode("utf-8"))
                 return
-            game = self.cfg.setdefault("game", {"process": "", "ring_hours": 4.0})
+            game = self.cfg.setdefault("game", {"process": "", "ring_hours": 24.0})
             if "process" in patch:
                 game["process"] = str(patch.get("process") or "").strip()
             if "ring_hours" in patch:
@@ -636,7 +668,7 @@ class HRService:
                     pass
             CFG_PATH.write_text(json.dumps(self.cfg, ensure_ascii=False, indent=2), encoding="utf-8")
             self.broadcast()
-            log("游戏计时：%s（环 %.1f 小时）" % (game.get("process") or "未选", game.get("ring_hours") or 4))
+            log("程序计时：%s（环 %.1f 小时）" % (game.get("process") or "未选", game.get("ring_hours") or 24))
             await self.respond(writer, 200, "application/json; charset=utf-8",
                                json.dumps(preview_game(self.cfg) or game_watch.game_status(self.cfg), ensure_ascii=False).encode("utf-8"),
                                no_cache=True)

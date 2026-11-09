@@ -59,6 +59,7 @@
   .num { font: 700 62px/1 "Consolas", monospace; text-anchor: middle; fill: #e8fbff;
          filter: drop-shadow(0 0 10px rgba(0, 229, 255, .45)); }
   .num.small { font-size: 40px; }
+  #gmNum { font-size: 27px; letter-spacing: .01em; }
   .unitlab { font: 12px/1 "Consolas", monospace; text-anchor: middle; fill: rgba(0, 229, 255, .78);
              letter-spacing: .18em; }
   .unitlab.small { font-size: 10px; letter-spacing: .1em; }
@@ -145,9 +146,8 @@
             <circle class="hub" cx="200" cy="200" r="14" />
             <circle class="hubdot" cx="200" cy="200" r="4" />
             <text class="num small" id="gmNum" x="200" y="300" text-anchor="middle">--</text>
-            <text class="unitlab small" id="gmUnit" x="200" y="324" text-anchor="middle" textLength="70" lengthAdjust="spacing">HOURS</text>
           </svg>
-          <div class="cap" id="gmCap">游戏时长</div>
+          <div class="cap" id="gmCap">程序时长</div>
       </div>
     </div>
   </div>
@@ -194,12 +194,23 @@
     if (v < 75) return '#2bff88';
     return '#00e5ff';
   }
-  // 游戏时长：相对「满格小时数」的比例上色
-  function gameColor(ratio) {
-    if (ratio < .25) return '#2bff88';
-    if (ratio < .5) return '#ffd60a';
-    if (ratio < .75) return '#ff8a1e';
-    return '#ff2b4e';
+  // 程序时长：相对「满格小时数」的比例上色
+  // 熬夜梯度：满格 24 小时，时间越长颜色越艹（只上色，不写字）
+  var STAY_STOPS = [
+    [3,    '#2bff88'],
+    [6,    '#00e5ff'],
+    [9,    '#b8e600'],
+    [12,   '#ffd60a'],
+    [16,   '#ff9f1a'],
+    [20,   '#ff6b1a'],
+    [24,   '#ff2b4e'],
+    [1e9,  '#8a3f66']
+  ];
+  function stayTier(hours) {
+    for (var i = 0; i < STAY_STOPS.length; i++) {
+      if (hours < STAY_STOPS[i][0]) return { c: STAY_STOPS[i][1] };
+    }
+    return { c: STAY_STOPS[STAY_STOPS.length - 1][1] };
   }
 
   function makeGauge(prefix, opt) {
@@ -310,16 +321,32 @@
     [50, 75, '#2bff88'], [75, 100, '#00e5ff']
   ], 100, 168);
 
-  var gmZoneEls = drawZoneRing('gmZones', [
-    [0, 25, '#2bff88'], [25, 50, '#ffd60a'], [50, 75, '#ff8a1e'], [75, 100, '#ff2b4e']
-  ], 100, 168);
+  // 时长环的参考环：按熬夜梯度铺段，跟着「满格小时数」实时重铺
+  var gmZoneEls = [];
+  var lastStayMax = -1;
+  function buildStayRing(maxH) {
+    var host = document.getElementById('gmZones');
+    if (!host) return;
+    host.innerHTML = '';
+    var segs = [], prev = 0;
+    for (var i = 0; i < STAY_STOPS.length; i++) {
+      var end = Math.min(maxH, STAY_STOPS[i][0]);
+      if (end > prev) { segs.push([prev, end, STAY_STOPS[i][1]]); prev = end; }
+      if (prev >= maxH) break;
+    }
+    gmZoneEls = drawZoneRing('gmZones', segs, maxH, 168);
+    lastStayMax = maxH;
+  }
 
   var lastBeat = 0;
 
-  function fmtHM(sec) {
+  // 计时显示：HH:MM:SS（纯数字，不带单位字母）；超过 99:59:59 就显示 XX:XX:XX
+  function fmtHMS(sec) {
     var s = Math.max(0, Math.round(sec));
-    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return h > 0 ? (h + ':' + (m < 10 ? '0' + m : m)) : (m + 'm');
+    if (s > 99 * 3600 + 59 * 60 + 59) return 'XX:XX:XX';
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), q = s % 60;
+    function p2(n) { return n < 10 ? '0' + n : '' + n; }
+    return p2(h) + ':' + p2(m) + ':' + p2(q);
   }
 
   function renderHR(d) {
@@ -376,38 +403,33 @@
 
   function renderGame(g) {
     var num = document.getElementById('gmNum');
-    var unit = document.getElementById('gmUnit');
     var cap = document.getElementById('gmCap');
     if (!g || !g.process) {
       num.textContent = '--';
       num.style.fill = '#5d6b7d'; num.style.color = '#5d6b7d';
       gmGauge.set(0, '#5d6b7d');
       paintZoneRing(gmZoneEls, null);
-      unit.textContent = '未选游戏';
-      cap.textContent = '游戏时长';
+      cap.textContent = '程序时长';
       return;
     }
-    var hours = Math.max(0.5, Number(g.ring_hours) || 4);
+    var hours = Math.max(0.5, Number(g.ring_hours) || 24);
+    if (hours !== lastStayMax) buildStayRing(hours);
     gmGauge.setMax(hours);
     var sec = Number(g.elapsed || 0);
     var ratio = sec / (hours * 3600);
     if (g.running) {
-      var c = gameColor(ratio);
-      num.textContent = fmtHM(sec);
+      var hr = sec / 3600, tier = stayTier(hr), c = tier.c;
+      num.textContent = fmtHMS(sec);
       num.style.fill = c; num.style.color = c;
       gmGauge.set(Math.min(hours, sec / 3600), c);
-      paintZoneRing(gmZoneEls, Math.min(100, ratio * 100));
-      unit.textContent = '运行中';
-      unit.style.fill = c;
+      paintZoneRing(gmZoneEls, sec / 3600);
     } else {
-      num.textContent = '0m';
+      num.textContent = fmtHMS(0);
       num.style.fill = '#5d6b7d'; num.style.color = '#5d6b7d';
       gmGauge.set(0, '#5d6b7d');
       paintZoneRing(gmZoneEls, null);
-      unit.textContent = '未运行';
-      unit.style.fill = 'rgba(0,229,255,.5)';
     }
-    cap.textContent = '游戏时长 · ' + (g.process || '');
+    cap.textContent = '程序时长 · ' + (g.process || '');
   }
 
   function pollHR() {
