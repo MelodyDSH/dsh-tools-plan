@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心率浮层 · 可视化设置</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #0d0f13; color: #e6eaf2;
+    font: 13px/1.5 "Microsoft YaHei", "Segoe UI", sans-serif;
+    display: flex; overflow: hidden;
+  }
+  #side {
+    width: 380px; flex: 0 0 380px; height: 100%; overflow-y: auto;
+    padding: 16px 16px 70px; background: #12151b; border-right: 1px solid #232833;
+  }
+  #side::-webkit-scrollbar { width: 8px; }
+  #side::-webkit-scrollbar-thumb { background: #2b3240; border-radius: 4px; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: #7d8798; font-size: 11px; margin-bottom: 14px; }
+  .box { border: 1px solid #232833; border-radius: 10px; padding: 10px 12px 12px; margin-bottom: 12px; background: #151922; }
+  .box > h2 { font-size: 12px; margin: 0 0 10px; color: #9fb0c8; font-weight: 600; letter-spacing: .04em; }
+  .row { margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .lbl { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #a8b4c6; margin-bottom: 4px; }
+  .lbl b { color: #e6eaf2; font-weight: 600; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: #4ea1ff; height: 18px; }
+  select, input[type=text], input[type=number] {
+    width: 100%; background: #0f1218; color: #e6eaf2; border: 1px solid #2b3240;
+    border-radius: 7px; padding: 6px 8px; font-size: 12px; font-family: inherit;
+  }
+  input[type=color] { width: 34px; height: 26px; padding: 0; border: 1px solid #2b3240; background: #0f1218; border-radius: 6px; }
+  .btn {
+    background: #1d2532; color: #dfe7f4; border: 1px solid #2f3948; border-radius: 7px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { background: #26303f; }
+  .btn.on { background: #173626; border-color: #2f6b46; color: #74e6a2; }
+  .btn.danger { background: #3a1b21; border-color: #5a2a33; color: #ff9aa8; }
+  .inline { display: flex; gap: 6px; align-items: center; }
+  .inline > * { flex: 1; }
+  .inline > .btn { flex: 0 0 auto; }
+  .chk { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #a8b4c6; }
+  .chk input { accent-color: #4ea1ff; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    border: 1px solid #2f3948; background: #171d27; color: #8d9aad;
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .chip.on { background: #17324f; border-color: #2b6cff; color: #cfe2ff; }
+  .chip:hover { border-color: #3c4a5e; }
+  .pane { border-left: 2px solid #232833; padding-left: 10px; margin: 8px 0 2px; }
+  .zone { border: 1px solid #232833; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #111620; }
+  .zone .top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .zone .top input[type=text] { flex: 1; }
+  .zone .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+  .asset { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #232833; font-size: 11px; }
+  .asset:last-child { border-bottom: 0; }
+  .asset .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #cbd6e6; }
+  .asset .sz { color: #6f7b8c; }
+  .asset .btn { padding: 2px 7px; font-size: 11px; }
+  #stage {
+    flex: 1; position: relative; display: flex; align-items: center; justify-content: center;
+    background:
+      linear-gradient(45deg, #15181e 25%, transparent 25%, transparent 75%, #15181e 75%) 0 0/24px 24px,
+      linear-gradient(45deg, #15181e 25%, transparent 25%, transparent 75%, #15181e 75%) 12px 12px/24px 24px,
+      #1a1e26;
+  }
+  #stageinner { width: 1100px; max-width: 94%; }
+  #stagebar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; color: #8d9aad; }
+  #stagebar .nm { color: #cbd6e6; font-weight: 600; }
+  #stagebar .btn { padding: 2px 8px; font-size: 11px; }
+  #stagebar .sp { flex: 1; }
+  #frameWrap { position: relative; width: 100%; overflow: hidden; }
+  #frame {
+    width: 100%; height: 360px; border: 0; background: transparent; display: block;
+    transform-origin: top left;
+  }
+  #hint { text-align: center; color: #6f7b8c; font-size: 11px; margin-top: 8px; }
+  #statusbar {
+    position: fixed; left: 16px; bottom: 12px; width: 348px;
+    display: flex; gap: 8px; align-items: center; font-size: 11px; color: #7d8798;
+  }
+  #status { flex: 1; }
+  #status.ok { color: #43d17c; }
+  #status.err { color: #ff6b81; }
+
+  /* 分类标签 */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tab {
+    flex: 1; text-align: center; padding: 7px 0; border-radius: 8px; cursor: pointer;
+    background: #151922; border: 1px solid #232833; color: #8d9aad; font-size: 12px;
+    font-family: inherit;
+  }
+  .tab.on { background: #17324f; border-color: #2b6cff; color: #cfe2ff; }
+  .skincard {
+    border: 1px solid #232833; border-radius: 10px; overflow: hidden;
+    margin-bottom: 12px; background: #0b0f16;
+  }
+  .skincard .hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; font-size: 12px; color: #cbd6e6;
+  }
+  .skincard .pv {
+    width: 100%; height: 230px; border: 0; display: block; background: #05070d;
+    pointer-events: none;
+  }
+  .skincard .url {
+    font: 10px/1.4 Consolas, monospace; color: #6f7b8c; padding: 6px 10px;
+    word-break: break-all;
+  }
+  .skincard .ft { display: flex; gap: 6px; padding: 0 10px 10px; }
+  .skincard .ft .btn { flex: 1; }
+  .empty { color: #6f7b8c; font-size: 11px; padding: 6px 2px; }
+</style>
+</head>
+<body>
+<div id="side">
+  <h1>心率浮层 · 可视化设置</h1>
+  <div class="sub">左边改，右边立刻变；OBS 里的浮层也不用刷新。</div>
+
+  <div class="tabs">
+    <button class="tab on" id="tab-diy">DIY 调整</button>
+    <button class="tab" id="tab-skin">皮肤</button>
+  </div>
+
+  <div class="box">
+    <h2>游戏时长（选进程，用它的运行时间计时）</h2>
+    <div class="row">
+      <select id="c-game-proc" style="flex:1"></select>
+      <button class="btn" id="c-game-refresh" title="重新扫一遍正在运行的程序">刷新</button>
+    </div>
+    <div class="row">
+      <input type="text" id="c-game-manual" placeholder="或手填 exe 名，例如 GenshinImpact.exe" style="flex:1">
+      <button class="btn" id="c-game-save">用这个</button>
+    </div>
+    <div class="lbl"><span>时长环满格（小时）</span><b id="c-game-hours-v">4</b></div>
+    <input type="range" id="c-game-hours" min="0.5" max="12" step="0.5" value="4">
+    <div style="color:#6f7b8c;font-size:11px" id="c-game-hint">当前：未选</div>
+  </div>
+
+  <div id="diy">
+
+  <div class="box">
+    <h2>左边一组：图标 + 数字</h2>
+    <div class="row">
+      <div class="lbl"><span>图标</span></div>
+      <div class="inline">
+        <select id="c-icon"></select>
+        <button class="btn" id="c-icon-up">上传…</button>
+      </div>
+      <input type="file" id="c-icon-file" accept="image/*" style="display:none">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>图标尺寸</span><b id="c-icon-size-v">42</b></div>
+      <input type="range" id="c-icon-size" min="12" max="240" step="1" value="42">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>图标 ↔ 数字 间距</span><b id="c-gap-v">14</b></div>
+      <input type="range" id="c-gap" min="0" max="80" step="1" value="14">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>数字字号</span><b id="c-num-size-v">60</b></div>
+      <input type="range" id="c-num-size" min="16" max="200" step="1" value="60">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>字体（本机已装）</span></div>
+      <select id="c-font"></select>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>位置微调（框内挪动）</h2>
+    <div class="row">
+      <div class="lbl"><span>左右</span><b id="c-offx-v">0</b></div>
+      <input type="range" id="c-offx" min="-40" max="40" step="1" value="0">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>上下</span><b id="c-offy-v">0</b></div>
+      <input type="range" id="c-offy" min="-40" max="40" step="1" value="0">
+    </div>
+    <div class="row">
+      <button class="btn" id="c-reset" style="width:100%">一键复位（全部回中、间距归位）</button>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>卡片</h2>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="c-show-panel" checked> 显示玻璃面板</label>
+    </div>
+    <div class="row">
+      <div class="lbl"><span>面板不透明度</span><b id="c-panel-alpha-v">0.55</b></div>
+      <input type="range" id="c-panel-alpha" min="0" max="1" step="0.01" value="0.55">
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="c-show-border" checked> 显示描边和投影</label>
+    </div>
+    <div class="row">
+      <div class="lbl"><span>圆角（60 = 全圆角）</span><b id="c-radius-v">40</b></div>
+      <input type="range" id="c-radius" min="0" max="60" step="1" value="40">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>底图</span></div>
+      <div class="inline">
+        <select id="c-bg"></select>
+        <button class="btn" id="c-bg-up">上传…</button>
+      </div>
+      <input type="file" id="c-bg-file" accept="image/*" style="display:none">
+    </div>
+    <div class="row">
+      <div class="lbl"><span>底图不透明度</span><b id="c-bgop-v">0.9</b></div>
+      <input type="range" id="c-bgop" min="0" max="1" step="0.01" value="0.9">
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>右侧工作区</h2>
+    <div class="chips">
+      <button class="chip" id="t-unit" data-on="1">单位 BPM</button>
+      <button class="chip" id="t-zone" data-on="1">档位名</button>
+      <button class="chip" id="t-dev" data-on="1">设备信息</button>
+      <button class="chip" id="t-batt" data-on="1">电量</button>
+    </div>
+
+    <div class="pane" id="p-unit">
+      <div class="row">
+        <div class="lbl"><span>「BPM」字号</span><b id="c-unit-size-v">13</b></div>
+        <input type="range" id="c-unit-size" min="6" max="60" step="1" value="13">
+      </div>
+    </div>
+
+    <div class="pane" id="p-zone">
+      <div class="row">
+        <div class="lbl"><span>档位名字号</span><b id="c-zone-size-v">14</b></div>
+        <input type="range" id="c-zone-size" min="6" max="60" step="1" value="14">
+      </div>
+    </div>
+
+    <div class="pane" id="p-dev">
+      <div class="row">
+        <div class="lbl"><span>设备字号</span><b id="c-dev-size-v">11</b></div>
+        <input type="range" id="c-dev-size" min="6" max="60" step="1" value="11">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>设备名（留空 = 手环真名）</span></div>
+        <input type="text" id="c-device-label" placeholder="例如：MI BAND 8">
+      </div>
+    </div>
+
+    <div class="pane" id="p-batt">
+      <div class="row">
+        <div class="lbl"><span>样式</span></div>
+        <select id="c-batt">
+          <option value="ring">圆环（数字可在环里）</option>
+          <option value="bar">电池条</option>
+        </select>
+      </div>
+      <div class="row">
+        <div class="lbl"><span>电量图标大小（数字跟着变）</span><b id="c-batt-size-v">22</b></div>
+        <input type="range" id="c-batt-size" min="10" max="72" step="1" value="22">
+      </div>
+      <div class="row">
+        <div class="lbl"><span>电量数字</span></div>
+        <select id="c-batt-num">
+          <option value="in">画在图标中间 / 里面</option>
+          <option value="out">放在图标右边</option>
+          <option value="off">不显示数字</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="row">
+        <div class="lbl"><span>这几项之间的间距</span><b id="c-meta-gap-v">4</b></div>
+        <input type="range" id="c-meta-gap" min="0" max="24" step="1" value="4">
+      </div>
+      <div style="color:#6f7b8c;font-size:11px">开几项都自动等距居中：2 项上下对称，3 项中间那项居中。</div>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>心率分档（换图标 / 颜色 / 名字）</h2>
+    <div id="c-zones"></div>
+  </div>
+
+  <div class="box">
+    <h2>素材管理</h2>
+    <div id="c-assets" style="max-height:200px;overflow:auto"></div>
+  </div>
+
+  </div><!-- /diy -->
+
+  <div id="skins" style="display:none">
+    <div class="box">
+      <h2>皮肤（整套外观，不做 DIY 混搭）</h2>
+      <div class="sub" style="margin:0 0 8px">皮肤是另一套页面，OBS 里换源地址就能用；想微调就在 OBS 里放大缩小、加滤镜。</div>
+      <div id="c-skins"></div>
+    </div>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="stageinner">
+    <div id="stagebar">
+      <span>预览：</span><span class="nm" id="stageLabel">心率浮层</span>
+      <span class="sp"></span>
+      <button class="btn" id="stage-home" title="回到 /overlay 浮层预览">回到浮层</button>
+    </div>
+    <div id="frameWrap"><iframe id="frame" src="/overlay" title="预览"></iframe></div>
+    <div id="hint">这里是实时预览（和 OBS 里一模一样的那一份渲染）；点皮肤卡片上的「效果预览」可以直接换成那套皮肤。</div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <span id="status">读取配置中…</span>
+  <button class="btn" id="c-prev" title="用假心率/假电量/假时长看三个环的效果，再点一次关">预览效果</button>
+  <button class="btn" id="c-reload">重新载入</button>
+</div>
+
+<script>
+(function () {
+  var el = function (id) { return document.getElementById(id); };
+  var cfg = null, assets = [], fonts = [], zones = [];
+  var saveTimer = null, statusTimer = null;
+
+  function status(msg, cls) {
+    var s = el('status');
+    s.textContent = msg;
+    s.className = cls || '';
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { s.textContent = ''; s.className = ''; }, 4000);
+  }
+
+  function fillSelect(sel, list, current, emptyLabel) {
+    sel.innerHTML = '';
+    if (emptyLabel != null) {
+      var o0 = document.createElement('option');
+      o0.value = ''; o0.textContent = emptyLabel;
+      sel.appendChild(o0);
+    }
+    list.forEach(function (item) {
+      var o = document.createElement('option');
+      o.value = item.value != null ? item.value : item;
+      o.textContent = item.label != null ? item.label : item;
+      sel.appendChild(o);
+    });
+    sel.value = current || '';
+    if (current && sel.value !== current) {
+      var o = document.createElement('option');
+      o.value = current; o.textContent = current + '（已丢失）';
+      sel.appendChild(o);
+      sel.value = current;
+    }
+  }
+
+  function assetNames() { return assets.map(function (a) { return a.name; }); }
+
+  function buildAssetSelects() {
+    var names = assetNames();
+    fillSelect(el('c-icon'), names, cfg.theme.icon, '（默认心形）');
+    fillSelect(el('c-bg'), names, cfg.theme.bg, '（无底图）');
+    zones.forEach(function (z, i) {
+      var s = document.getElementById('z-icon-' + i);
+      if (s) fillSelect(s, names, z.icon || '', '（跟随全局）');
+    });
+  }
+
+  function numberRow(id, val, fmt) {
+    var r = el(id), v = el(id + '-v');
+    r.value = val;
+    v.textContent = fmt ? fmt(val) : val;
+    r.oninput = function () {
+      v.textContent = fmt ? fmt(+r.value) : r.value;
+      scheduleSave();
+    };
+  }
+
+  function ratioRow(id, val) {
+    var r = el(id), v = el(id + '-v');
+    r.value = val;
+    v.textContent = (+val).toFixed(2);
+    r.oninput = function () {
+      v.textContent = (+r.value).toFixed(2);
+      scheduleSave();
+    };
+  }
+
+  function setChip(btn, on) {
+    btn.dataset.on = on ? '1' : '0';
+    btn.classList.toggle('on', !!on);
+  }
+
+  function updatePanes() {
+    ['unit', 'zone', 'dev', 'batt'].forEach(function (k) {
+      var on = el('t-' + k).dataset.on === '1';
+      var pane = el('p-' + k);
+      if (pane) pane.style.display = on ? '' : 'none';
+    });
+  }
+
+  function buildZones() {
+    var host = el('c-zones');
+    host.innerHTML = '';
+    zones.forEach(function (z, i) {
+      var d = document.createElement('div');
+      d.className = 'zone';
+      d.innerHTML =
+        '<div class="top">' +
+          '<input type="color" id="z-color-' + i + '" value="' + (z.color || '#43d17c') + '">' +
+          '<input type="text" id="z-name-' + i + '" value="' + (z.name || '') + '" placeholder="档位名">' +
+        '</div>' +
+        '<div class="grid2">' +
+          '<input type="number" id="z-min-' + i + '" value="' + (z.min == null ? 0 : z.min) + '" title="下限">' +
+          '<input type="number" id="z-max-' + i + '" value="' + (z.max == null ? 0 : z.max) + '" title="上限">' +
+        '</div>' +
+        '<select id="z-icon-' + i + '"></select>';
+      host.appendChild(d);
+
+      var minEl = document.getElementById('z-min-' + i), maxEl = document.getElementById('z-max-' + i);
+      function fixRange() {
+        var lo = +minEl.value || 0, hi = +maxEl.value || 0;
+        if (hi <= lo) maxEl.value = lo + 1;
+      }
+      ['input', 'change'].forEach(function (ev) {
+        ['z-color-' + i, 'z-name-' + i, 'z-min-' + i, 'z-max-' + i, 'z-icon-' + i].forEach(function (id) {
+          document.getElementById(id).addEventListener(ev, function () { fixRange(); scheduleSave(); });
+        });
+      });
+    });
+    buildAssetSelects();
+  }
+
+  function switchTab(which) {
+    var diy = which !== 'skin';
+    el('tab-diy').classList.toggle('on', diy);
+    el('tab-skin').classList.toggle('on', !diy);
+    el('diy').style.display = diy ? '' : 'none';
+    el('skins').style.display = diy ? 'none' : '';
+    if (!diy) loadSkins();
+  }
+
+  // ---- 右侧预览区：可以在「浮层」和任意一套「皮肤」之间切换 ----
+  var stageNow = { src: '/overlay', title: '心率浮层', w: 680, h: 360 };
+
+  function fitStage() {
+    var wrap = el('frameWrap'), fr = el('frame');
+    if (!wrap || !fr) return;
+    var box = wrap.clientWidth || 680;
+    var k = Math.min(1, box / stageNow.w);
+    fr.style.width = stageNow.w + 'px';
+    fr.style.height = stageNow.h + 'px';
+    fr.style.transform = 'scale(' + k + ')';
+    wrap.style.height = Math.round(stageNow.h * k) + 'px';
+  }
+
+  function setStage(src, title, w, h) {
+    stageNow = { src: src, title: title, w: w || 680, h: h || 360 };
+    el('stageLabel').textContent = title;
+    fitStage();
+    var fr = el('frame');
+    fr.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+  }
+
+  window.addEventListener('resize', fitStage);
+
+  function loadSkins() {
+    var host = el('c-skins');
+    fetch('/api/skins', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        if (!list.length) {
+          host.innerHTML = '<div class="empty">还没有皮肤。把 html 丢进 ble\\overlay\\skins\\ 就会出现在这里。</div>';
+          return;
+        }
+        host.innerHTML = '';
+        list.forEach(function (s) {
+          var url = location.origin + s.url;
+          var d = document.createElement('div');
+          d.className = 'skincard';
+          d.innerHTML =
+            '<div class="hd"><b>' + s.title + '</b><span style="color:#6f7b8c">' + s.name + '</span></div>' +
+            '<iframe class="pv" src="' + s.url + '?t=' + Date.now() + '" loading="lazy"></iframe>' +
+            '<div class="url">' + url + '</div>';
+          var ft = document.createElement('div');
+          ft.className = 'ft';
+          var b1 = document.createElement('button');
+          b1.className = 'btn';
+          b1.textContent = 'OBS 地址';
+          b1.onclick = function () {
+            navigator.clipboard.writeText(url).then(function () { status('地址已复制', 'ok'); },
+              function () { prompt('手动复制：', url); });
+          };
+          var b2 = document.createElement('button');
+          b2.className = 'btn';
+          b2.textContent = '新窗口预览';
+          b2.onclick = function () { window.open(url, '_blank'); };
+          var b3 = document.createElement('button');
+          b3.className = 'btn';
+          b3.textContent = '效果预览';
+          b3.title = '把右边这块预览区换成这套皮肤，不用开新窗口';
+          b3.onclick = function () { setStage(s.url, s.title, 1100, 430); status('预览已切到 ' + s.title, 'ok'); };
+          ft.appendChild(b1); ft.appendChild(b3); ft.appendChild(b2);
+          d.appendChild(ft);
+          host.appendChild(d);
+        });
+      })
+      .catch(function (e) { host.innerHTML = '<div class="empty">读取皮肤失败：' + e + '</div>'; });
+  }
+
+  function buildAssets() {
+    var host = el('c-assets');
+    host.innerHTML = '';
+    if (!assets.length) {
+      host.innerHTML = '<div style="color:#6f7b8c;font-size:11px">还没有素材，用上面的「上传…」加。</div>';
+      return;
+    }
+    assets.forEach(function (a) {
+      var d = document.createElement('div');
+      d.className = 'asset';
+      var kb = a.size > 1048576 ? (a.size / 1048576).toFixed(1) + ' MB' : Math.round(a.size / 1024) + ' KB';
+      d.innerHTML = '<span class="nm" title="' + a.name + '">' + a.name + '</span><span class="sz">' + kb + '</span>';
+      var b = document.createElement('button');
+      b.className = 'btn danger';
+      b.textContent = '删除';
+      b.onclick = function () { removeAsset(a.name); };
+      d.appendChild(b);
+      host.appendChild(d);
+    });
+  }
+
+  function removeAsset(name) {
+    if (!confirm('删掉素材「' + name + '」？用到它的地方会自动清空。')) return;
+    fetch('/api/asset?name=' + encodeURIComponent(name), { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.ok) {
+          status('已删除 ' + name + (res.cleaned && res.cleaned.length ? '（清了 ' + res.cleaned.length + ' 处引用）' : ''), 'ok');
+          return refreshAll();
+        }
+        status('删除失败', 'err');
+      })
+      .catch(function (e) { status('删除失败: ' + e, 'err'); });
+  }
+
+  function collect() {
+    return {
+      theme: {
+        icon: el('c-icon').value,
+        icon_size: +el('c-icon-size').value,
+        gap: +el('c-gap').value,
+        num_size: +el('c-num-size').value,
+        font: el('c-font').value,
+        offx: +el('c-offx').value,
+        offy: +el('c-offy').value,
+        show_panel: el('c-show-panel').checked,
+        panel_alpha: +el('c-panel-alpha').value,
+        show_border: el('c-show-border').checked,
+        radius: +el('c-radius').value,
+        bg: el('c-bg').value,
+        bg_opacity: +el('c-bgop').value,
+        unit_show: el('t-unit').dataset.on === '1',
+        unit_size: +el('c-unit-size').value,
+        show_zone: el('t-zone').dataset.on === '1',
+        zone_size: +el('c-zone-size').value,
+        show_device: el('t-dev').dataset.on === '1',
+        dev_size: +el('c-dev-size').value,
+        device_label: el('c-device-label').value,
+        batt: el('t-batt').dataset.on === '1' ? el('c-batt').value : 'off',
+        batt_size: +el('c-batt-size').value,
+        batt_num: el('c-batt-num').value,
+        meta_gap: +el('c-meta-gap').value
+      },
+      zones: zones.map(function (z, i) {
+        return {
+          name: document.getElementById('z-name-' + i).value,
+          color: document.getElementById('z-color-' + i).value,
+          icon: document.getElementById('z-icon-' + i).value,
+          min: +document.getElementById('z-min-' + i).value,
+          max: +document.getElementById('z-max-' + i).value
+        };
+      })
+    };
+  }
+
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 160);
+  }
+
+  function save() {
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collect())
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.ok) {
+          cfg = res.config;
+          status('已保存 · rev ' + (cfg.theme.rev || 0), 'ok');
+        }
+      })
+      .catch(function (e) { status('保存失败: ' + e, 'err'); });
+  }
+
+  function bindAll() {
+    ['c-icon', 'c-bg', 'c-font', 'c-batt', 'c-batt-num'].forEach(function (id) {
+      el(id).addEventListener('change', scheduleSave);
+    });
+    ['c-show-panel', 'c-show-border'].forEach(function (id) {
+      el(id).addEventListener('change', scheduleSave);
+    });
+    el('c-device-label').addEventListener('input', scheduleSave);
+
+    ['t-unit', 't-zone', 't-dev', 't-batt'].forEach(function (id) {
+      el(id).onclick = function () {
+        setChip(el(id), el(id).dataset.on !== '1');
+        updatePanes();
+        scheduleSave();
+      };
+    });
+
+    el('c-reset').onclick = function () {
+      el('c-offx').value = 0; el('c-offx-v').textContent = '0';
+      el('c-offy').value = 0; el('c-offy-v').textContent = '0';
+      el('c-gap').value = 14; el('c-gap-v').textContent = '14';
+      el('c-meta-gap').value = 4; el('c-meta-gap-v').textContent = '4';
+      scheduleSave();
+      status('已复位', 'ok');
+    };
+
+    el('c-icon-up').onclick = function () { el('c-icon-file').click(); };
+    el('c-icon-file').onchange = function (e) { upload(e.target.files[0], 'c-icon'); };
+    el('c-bg-up').onclick = function () { el('c-bg-file').click(); };
+    el('c-bg-file').onchange = function (e) { upload(e.target.files[0], 'c-bg'); };
+
+    // ---- 预览效果：只改服务端内存里的数，不动 config.json ----
+    var prevOn = false, prevTimer = null;
+
+    function paintPrev(st) {
+      prevOn = !!(st && st.on);
+      var b = el('c-prev');
+      b.classList.toggle('on', prevOn);
+      b.textContent = prevOn ? '预览中（点一下关）' : '预览效果';
+    }
+
+    function tickPrev() {
+      fetch('/api/preview', { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          paintPrev(st);
+          if (!st.on && prevTimer) { clearInterval(prevTimer); prevTimer = null; }
+        })
+        .catch(function () {});
+    }
+
+    function setPrev(on) {
+      fetch('/api/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on: on, mode: 'sweep' })
+      }).then(function (r) { return r.json(); })
+        .then(function (st) {
+          paintPrev(st);
+          if (prevTimer) { clearInterval(prevTimer); prevTimer = null; }
+          if (st.on) { prevTimer = setInterval(tickPrev, 5000); }
+          status(st.on ? '预览开：假心率 + 电量循环 + 假时长，再点一下关' : '预览关：回到真实数据', 'ok');
+        })
+        .catch(function () { status('预览开关没生效（服务没响应）', 'err'); });
+    }
+
+    el('c-prev').onclick = function () { setPrev(!prevOn); };
+
+    el('c-reload').onclick = function () {
+      setStage(stageNow.src, stageNow.title, stageNow.w, stageNow.h);
+      refreshAll();
+    };
+
+    el('stage-home').onclick = function () {
+      setStage('/overlay', '心率浮层', 680, 360);
+    };
+    fitStage();
+
+    fetch('/api/preview', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (st) { paintPrev(st); if (st.on) { prevTimer = setInterval(tickPrev, 5000); } })
+      .catch(function () {});
+
+    el('tab-diy').onclick = function () { switchTab('diy'); };
+    el('tab-skin').onclick = function () { switchTab('skin'); };
+  }
+
+  function upload(file, targetSelect) {
+    if (!file) return;
+    fetch('/api/asset?name=' + encodeURIComponent(file.name), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file
+    }).then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) { status('上传被拒（只收 png/jpg/gif/webp）', 'err'); return; }
+        status('已上传 ' + res.name, 'ok');
+        var want = res.name;
+        return refreshAll().then(function () { el(targetSelect).value = want; scheduleSave(); });
+      })
+      .catch(function (e) { status('上传失败: ' + e, 'err'); });
+  }
+
+  function applyCfgToForm() {
+    var t = cfg.theme || {};
+    zones = cfg.zones || [];
+    var fonts2 = fonts.slice();
+    fillSelect(el('c-font'), fonts2, t.font || 'Segoe UI', null);
+    fillSelect(el('c-batt'), [{ value: 'ring', label: '圆环（数字可在环里）' },
+                              { value: 'bar', label: '电池条' }], t.batt === 'bar' ? 'bar' : 'ring', null);
+    fillSelect(el('c-batt-num'), [{ value: 'in', label: '画在图标中间 / 里面' },
+                                  { value: 'out', label: '放在图标右边' },
+                                  { value: 'off', label: '不显示数字' }], t.batt_num || 'in', null);
+
+    numberRow('c-icon-size', t.icon_size == null ? 42 : t.icon_size);
+    numberRow('c-gap', t.gap == null ? 14 : t.gap);
+    numberRow('c-num-size', t.num_size == null ? 60 : t.num_size);
+    numberRow('c-offx', t.offx || 0);
+    numberRow('c-offy', t.offy || 0);
+    numberRow('c-radius', t.radius == null ? 40 : t.radius);
+    numberRow('c-unit-size', t.unit_size == null ? 13 : t.unit_size);
+    numberRow('c-zone-size', t.zone_size == null ? 14 : t.zone_size);
+    numberRow('c-dev-size', t.dev_size == null ? 11 : t.dev_size);
+    numberRow('c-batt-size', t.batt_size == null ? 22 : t.batt_size);
+    numberRow('c-meta-gap', t.meta_gap == null ? 4 : t.meta_gap);
+    ratioRow('c-panel-alpha', t.panel_alpha == null ? 0.55 : t.panel_alpha);
+    ratioRow('c-bgop', t.bg_opacity == null ? 0.9 : t.bg_opacity);
+
+    el('c-show-panel').checked = t.show_panel !== false;
+    el('c-show-border').checked = t.show_border !== false;
+    el('c-device-label').value = t.device_label || '';
+
+    setChip(el('t-unit'), t.unit_show !== false);
+    setChip(el('t-zone'), t.show_zone !== false);
+    setChip(el('t-dev'), t.show_device !== false);
+    setChip(el('t-batt'), t.batt !== 'off');
+    updatePanes();
+
+    buildZones();
+    buildAssetSelects();
+  }
+
+  function refreshAll() {
+    return fetch('/api/config', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (c) {
+        cfg = c;
+        return Promise.all([
+          fetch('/api/assets', { cache: 'no-store' }).then(function (r) { return r.json(); }),
+          fetch('/api/fonts', { cache: 'no-store' }).then(function (r) { return r.json(); })
+        ]);
+      })
+      .then(function (all) {
+        assets = all[0] || [];
+        fonts = all[1] || [];
+        applyCfgToForm();
+        buildAssets();
+      });
+  }
+
+  bindAll();
+  refreshAll()
+    .then(function () { status('就绪', 'ok'); })
+    .catch(function (e) { status('读取失败: ' + e, 'err'); });
+
+  // ── 游戏计时：下拉选运行中的进程（A）+ 手填 exe 名（C） ──
+  (function gameUI() {
+    var sel = el('c-game-proc'), hint = el('c-game-hint');
+    var hoursEl = el('c-game-hours'), hoursV = el('c-game-hours-v');
+    var manual = el('c-game-manual');
+
+    function fillList(force) {
+      fetch('/api/processes' + (force ? '?force=1' : ''), { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var items = (d && d.items) || [];
+          var seen = {}, opts = ['<option value="">— 选一个正在运行的程序 —</option>'];
+          items.forEach(function (p) {
+            var key = (p.name || '').toLowerCase();
+            if (!key || seen[key]) return;
+            seen[key] = 1;
+            var label = p.name + (p.title ? '  ·  ' + p.title.slice(0, 28) : '');
+            opts.push('<option value="' + p.name.replace(/"/g, '&quot;') + '">' +
+                      label.replace(/</g, '&lt;') + '</option>');
+          });
+          sel.innerHTML = opts.join('');
+          if (cfg && cfg.game && cfg.game.process) sel.value = cfg.game.process;
+        })
+        .catch(function () { sel.innerHTML = '<option value="">（读不到进程列表）</option>'; });
+    }
+
+    function paintGame(st) {
+      if (!st) return;
+      hoursEl.value = st.ring_hours || 4;
+      hoursV.textContent = (st.ring_hours || 4);
+      if (st.process) {
+        var t = st.running ? ('运行中 ' + Math.floor((st.elapsed || 0) / 60) + ' 分钟') : '未运行';
+        hint.textContent = '当前：' + st.process + ' · ' + t;
+        hint.style.color = st.running ? '#74e6a2' : '#6f7b8c';
+      } else {
+        hint.textContent = '当前：未选';
+        hint.style.color = '#6f7b8c';
+      }
+    }
+
+    function saveGame(proc) {
+      var body = { process: proc, ring_hours: Number(hoursEl.value) || 4 };
+      fetch('/api/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (r) { return r.json(); })
+        .then(function (st) {
+          if (cfg) cfg.game = { process: st.process, ring_hours: st.ring_hours };
+          paintGame(st);
+          status(proc ? ('游戏计时 → ' + proc) : '游戏计时已清空', 'ok');
+        })
+        .catch(function () { status('游戏计时没保存上', 'err'); });
+    }
+
+    el('c-game-refresh').onclick = function () { fillList(true); status('已刷新进程列表', 'ok'); };
+    sel.onchange = function () { if (sel.value) { manual.value = sel.value; saveGame(sel.value); } };
+    el('c-game-save').onclick = function () {
+      saveGame((manual.value || '').trim());
+    };
+    hoursEl.oninput = function () { hoursV.textContent = hoursEl.value; };
+    hoursEl.onchange = function () { saveGame((cfg && cfg.game && cfg.game.process) || (manual.value || '').trim()); };
+
+    fillList(false);
+    fetch('/api/game', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (st) {
+        if (cfg) cfg.game = { process: st.process, ring_hours: st.ring_hours };
+        paintGame(st);
+        if (st.process) manual.value = st.process;
+      })
+      .catch(function () {});
+  })();
+})();
+</script>
+</body>
+</html>

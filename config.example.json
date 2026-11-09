@@ -1,0 +1,84 @@
+{
+  "port": 8787,
+  "device": {
+    "mac": "",
+    "name_match": "Smart Band",
+    "require_service": "0000180d-0000-1000-8000-00805f9b34fb",
+    "min_rssi": -85,
+    "scan_seconds": 6
+  },
+  "theme": {
+    "icon": "",
+    "icon_size": 42,
+    "gap": 14,
+    "gap_right": 18,
+    "offx": 0,
+    "offy": 0,
+    "bg": "",
+    "bg_opacity": 0.9,
+    "panel_alpha": 0.55,
+    "show_panel": true,
+    "show_border": true,
+    "radius": 40,
+    "num_size": 60,
+    "font": "Segoe UI",
+    "meta_gap": 4,
+    "unit_show": true,
+    "unit_size": 13,
+    "show_zone": true,
+    "zone_size": 14,
+    "show_device": true,
+    "dev_size": 11,
+    "device_label": "",
+    "batt": "ring",
+    "batt_size": 22,
+    "batt_num": "in",
+    "rev": 0
+  },
+  "game": {
+    "process": "",
+    "ring_hours": 4.0
+  },
+  "zones": [
+    {
+      "name": "很低",
+      "min": 0,
+      "max": 50,
+      "color": "#4ea1ff",
+      "icon": "",
+      "gif": ""
+    },
+    {
+      "name": "静息",
+      "min": 50,
+      "max": 70,
+      "color": "#43d17c",
+      "icon": "",
+      "gif": ""
+    },
+    {
+      "name": "日常",
+      "min": 70,
+      "max": 100,
+      "color": "#ffd166",
+      "icon": "",
+      "gif": ""
+    },
+    {
+      "name": "运动",
+      "min": 100,
+      "max": 130,
+      "color": "#ff8a3d",
+      "icon": "",
+      "gif": ""
+    },
+    {
+      "name": "冲刺",
+      "min": 130,
+      "max": 300,
+      "color": "#ff3b5c",
+      "icon": "",
+      "gif": ""
+    }
+  ]
+}

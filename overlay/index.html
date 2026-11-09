@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>心率浮层</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+  #wrap { position: relative; height: 100%; }
+
+  #badge {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(calc(-50% + var(--shift, 0px)), -50%);
+    display: flex; align-items: center;
+    gap: var(--gap-right, 18px);
+    padding: var(--pad, 10px 20px);
+    border-radius: var(--radius, 40px);
+    background: var(--panel, rgba(12,14,20,.55));
+    border: 1px solid var(--border-color, rgba(255,255,255,.14));
+    box-shadow: var(--shadow, 0 8px 28px rgba(0,0,0,.35));
+    backdrop-filter: var(--blur, blur(8px));
+    -webkit-backdrop-filter: var(--blur, blur(8px));
+    transition: background-color .12s linear, border-radius .12s linear;
+  }
+  #badge.no-panel {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  #badge.no-border { border-color: transparent !important; box-shadow: none !important; }
+
+  #bgimg {
+    position: absolute; inset: 0; z-index: 0;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+    opacity: var(--bgop, .9); pointer-events: none; border-radius: inherit;
+  }
+
+  /* 左组：图标 + 数字（间距只影响这一组） */
+  #left {
+    position: relative; z-index: 1;
+    display: flex; align-items: center;
+    gap: var(--gap, 14px);
+    transform: translate(var(--offx, 0px), var(--offy, 0px));
+  }
+  #iconwrap {
+    width: var(--iconsize, 42px); height: var(--iconsize, 42px);
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+    transform-origin: center;
+  }
+  #iconwrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #iconwrap svg { width: 100%; height: 100%; display: block; }
+  #iconwrap.beat { animation: beat var(--beat, 1s) ease-in-out infinite; }
+  @keyframes beat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.13); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.08); }
+    56% { transform: scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) { #iconwrap.beat { animation: none; } }
+
+  #num {
+    font-size: var(--numsize, 60px); font-weight: 800; line-height: 1;
+    color: var(--zone-color, #43d17c);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 10px rgba(0,0,0,.35);
+  }
+
+  /* 右组：独立工作区，垂直居中，各项之间等距（2 项对称、3 项中间居中） */
+  #meta {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start;
+    gap: var(--metagap, 4px);
+    line-height: 1.15;
+  }
+  #unit { font-size: var(--unit-size, 13px); letter-spacing: .14em; color: rgba(255,255,255,.62); }
+  #zone { font-size: var(--zone-size, 14px); font-weight: 600; color: var(--zone-color, #43d17c); }
+  #dev { font-size: var(--dev-size, 11px); color: rgba(255,255,255,.55); white-space: nowrap; }
+  #battrow { display: flex; align-items: center; gap: 4px; }
+  #battrow svg { display: block; }
+  #batttext { font-size: calc(var(--batt-size, 22px) * 0.62); color: rgba(255,255,255,.78); font-variant-numeric: tabular-nums; }
+
+  .hide { display: none !important; }
+
+  body.bar #badge { border-radius: var(--radius, 10px); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="badge">
+    <div id="bgimg" class="hide"></div>
+
+    <div id="left">
+      <div id="iconwrap">
+        <svg id="heart" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 28s-11-6.6-11-14.2C5 8.6 8.4 6 11.8 6c2.1 0 3.5 1 4.2 2.1C16.7 7 18.1 6 20.2 6 23.6 6 27 8.6 27 13.8 27 21.4 16 28 16 28z"
+                fill="var(--zone-color, #43d17c)"/>
+        </svg>
+        <img id="iconimg" class="hide" alt="">
+      </div>
+      <div id="num">--</div>
+    </div>
+
+    <div id="meta">
+      <div id="unit">BPM</div>
+      <div id="zone" class="hide">--</div>
+      <div id="dev" class="hide"></div>
+      <div id="battrow" class="hide"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var el = function (id) { return document.getElementById(id); };
+  var badge = el('badge'), bg = el('bgimg'), num = el('num'),
+      heart = el('heart'), img = el('iconimg'), wrap = el('iconwrap'),
+      zoneEl = el('zone'), devEl = el('dev'),
+      battRow = el('battrow');
+
+  var theme = {};
+  var curIcon = null, curBg = null, curBgRev = -1;
+  var fetchedRev = -1;
+
+  var qs = new URLSearchParams(location.search);
+  var forceGif = qs.get('gif') || '';
+  if (qs.get('mode') === 'bar') document.body.classList.add('bar');
+
+  function rgba(hex, alpha) {
+    var s = String(hex || '#0c0e14').trim();
+    var m = s.match(/^#?([0-9a-f]{6})$/i);
+    if (m) {
+      var n = parseInt(m[1], 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + alpha + ')';
+    }
+    if (s.indexOf('rgb') === 0) {
+      var nums = s.replace(/[^0-9.,]/g, '').split(',').slice(0, 3).join(',');
+      return 'rgba(' + nums + ',' + alpha + ')';
+    }
+    return 'rgba(12,14,20,' + alpha + ')';
+  }
+
+  function setIcon(name, ver) {
+    name = name || '';
+    var key = name + '@' + (ver || 0);
+    if (key === curIcon) return;
+    curIcon = key;
+    if (!name) {
+      img.classList.add('hide');
+      heart.classList.remove('hide');
+      return;
+    }
+    img.onerror = function () { img.classList.add('hide'); heart.classList.remove('hide'); };
+    img.onload = function () { img.classList.remove('hide'); heart.classList.add('hide'); };
+    img.src = '/asset/' + encodeURIComponent(name) + '?v=' + (ver || 0);
+  }
+
+  function setBg(name, opacity, ver) {
+    var use = name || forceGif || '';
+    if (use !== curBg || ver !== curBgRev) {
+      if (use) {
+        bg.style.backgroundImage = 'url("/asset/' + encodeURIComponent(use) + '?v=' + (ver || 0) + '")';
+        bg.classList.remove('hide');
+      } else {
+        bg.style.backgroundImage = '';
+        bg.classList.add('hide');
+      }
+      curBg = use; curBgRev = ver;
+    }
+    document.documentElement.style.setProperty('--bgop', opacity);
+  }
+
+  /* 电量：ring = 数字画在圆环正中间；bar = 电池条；num 决定数字放哪 */
+  function battHtml(pct, style, numPos) {
+    var size = theme.batt_size || 22;
+    var color = pct <= 15 ? '#ff3b5c' : (pct <= 35 ? '#ffd166' : '#43d17c');
+    if (style === 'bar') {
+      var fill = Math.max(0, Math.min(1, pct / 100));
+      return '<svg width="' + (size * 1.7).toFixed(0) + '" height="' + size + '" viewBox="0 0 34 20">' +
+        '<rect x="0.8" y="2.2" width="27" height="15.6" rx="3.4" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/>' +
+        '<rect x="29" y="7" width="2.6" height="6" rx="1.2" fill="rgba(255,255,255,.5)"/>' +
+        '<rect x="3" y="4.4" width="' + (22.6 * fill).toFixed(1) + '" height="11.2" rx="2" fill="' + color + '"/>' +
+        (numPos === 'in' && size >= 16
+          ? '<text x="14" y="13.6" text-anchor="middle" font-size="9.5" fill="#fff" font-family="Segoe UI">' + pct + '</text>'
+          : '') +
+        '</svg>';
+    }
+    var r = 15.2, c = 2 * Math.PI * r;
+    var dash = (c * Math.max(0, Math.min(100, pct)) / 100).toFixed(1);
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 40 40">' +
+      '<circle cx="20" cy="20" r="' + r + '" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="3.6"/>' +
+      '<circle cx="20" cy="20" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="3.6" ' +
+      'stroke-linecap="round" stroke-dasharray="' + dash + ' ' + c.toFixed(1) + '" transform="rotate(-90 20 20)"/>' +
+      (numPos === 'in'
+        ? '<text x="20" y="20" text-anchor="middle" dominant-baseline="central" ' +
+          'font-size="' + (size >= 26 ? 13 : 12) + '" fill="#fff" font-family="Segoe UI">' + pct + '</text>'
+        : '') +
+      '</svg>';
+  }
+
+  function applyTheme(t, rev, ver) {
+    if (!t) return;
+    theme = t;
+    ver = ver || {};
+    var r = document.documentElement.style;
+    var gap = (t.gap == null ? 14 : +t.gap);
+    r.setProperty('--gap', gap + 'px');
+    // 间距变大时整块往左让一半，卡片右缘（右侧工作区）就钉住不动
+    r.setProperty('--shift', (14 - gap) / 2 + 'px');
+    r.setProperty('--gap-right', (t.gap_right == null ? 18 : +t.gap_right) + 'px');
+    r.setProperty('--offx', (t.offx || 0) + 'px');
+    r.setProperty('--offy', (t.offy || 0) + 'px');
+    r.setProperty('--radius', (+t.radius >= 60 ? '999px' : (t.radius == null ? 40 : +t.radius) + 'px'));
+    r.setProperty('--numsize', (t.num_size == null ? 60 : t.num_size) + 'px');
+    r.setProperty('--iconsize', (t.icon_size == null ? 42 : t.icon_size) + 'px');
+    r.setProperty('--unit-size', (t.unit_size == null ? 13 : t.unit_size) + 'px');
+    r.setProperty('--zone-size', (t.zone_size == null ? 14 : t.zone_size) + 'px');
+    r.setProperty('--dev-size', (t.dev_size == null ? 11 : t.dev_size) + 'px');
+    r.setProperty('--batt-size', (t.batt_size == null ? 22 : t.batt_size) + 'px');
+    r.setProperty('--metagap', (t.meta_gap == null ? 4 : t.meta_gap) + 'px');
+    var font = (t.font || 'Segoe UI').replace(/"/g, '');
+    document.body.style.fontFamily = '"' + font + '", "Microsoft YaHei", sans-serif';
+
+    var showPanel = t.show_panel !== false;
+    var alpha = (t.panel_alpha == null ? 0.55 : +t.panel_alpha);
+    badge.classList.toggle('no-panel', !showPanel);
+    badge.classList.toggle('no-border', t.show_border === false);
+    r.setProperty('--panel', showPanel ? rgba(t.panel_bg || '#0c0e14', alpha) : 'transparent');
+    r.setProperty('--border-color', t.show_border === false ? 'transparent' : 'rgba(255,255,255,.14)');
+    r.setProperty('--shadow', (showPanel && t.show_border !== false) ? '0 8px 28px rgba(0,0,0,.35)' : 'none');
+    r.setProperty('--blur', (showPanel && alpha < 0.98) ? 'blur(8px)' : 'none');
+    // 关掉面板时留一点内边距，避免边缘把字切掉
+    r.setProperty('--pad', showPanel ? '10px 20px' : '2px 4px');
+
+    el('unit').classList.toggle('hide', t.unit_show === false);
+    zoneEl.classList.toggle('hide', t.show_zone === false);
+    devEl.classList.toggle('hide', t.show_device === false);
+
+    setIcon(t.icon, ver[t.icon] || 0);
+    setBg(t.bg, (t.bg_opacity == null ? 0.9 : +t.bg_opacity), ver[t.bg] || 0);
+  }
+
+  function render(d) {
+    var t = d.theme || {};
+    var rev = t.rev == null ? 0 : t.rev;
+    var ver = d.assetver || {};
+    if (rev !== fetchedRev) {
+      fetchedRev = rev;
+      applyTheme(t, rev, ver);
+    }
+    var z = d.zone || {};
+    document.documentElement.style.setProperty('--zone-color', z.color || '#43d17c');
+
+    if (d.bpm) {
+      num.textContent = d.bpm;
+      var period = Math.max(0.45, Math.min(2.0, 60 / d.bpm));
+      document.documentElement.style.setProperty('--beat', period.toFixed(2) + 's');
+      wrap.classList.add('beat');
+    } else {
+      num.textContent = '--';
+      wrap.classList.remove('beat');
+    }
+
+    zoneEl.textContent = z.name || '';
+    devEl.textContent = (t.device_label || '').trim() || d.device || '';
+
+    // 右侧工作区：单位 / 档位 / 设备 / 电量，谁开着谁参与等距排列
+    var showBatt = t.batt !== 'off' && d.battery != null;
+    if (showBatt) {
+      var numPos = t.batt_num || 'in';
+      var extra = (numPos === 'out')
+        ? '<span id="batttext">' + d.battery + '</span>' : '';
+      battRow.innerHTML = battHtml(d.battery, t.batt === 'bar' ? 'bar' : 'ring', numPos) + extra;
+      battRow.classList.remove('hide');
+    } else {
+      battRow.classList.add('hide');
+      battRow.innerHTML = '';
+    }
+
+    var anyMeta = (t.unit_show !== false) || (t.show_zone !== false) ||
+                  (t.show_device !== false) || showBatt;
+    el('meta').classList.toggle('hide', !anyMeta);
+
+    var wantIcon = (z.icon || '').trim() ? z.icon : (t.icon || '');
+    setIcon(wantIcon, ver[wantIcon] || 0);
+  }
+
+  var es = null;
+  function connectSSE() {
+    if (es) { try { es.close(); } catch (e) {} }
+    es = new EventSource('/events');
+    es.onmessage = function (ev) { try { render(JSON.parse(ev.data)); } catch (e) {} };
+    es.onerror = function () { try { es.close(); } catch (e) {} es = null; setTimeout(connectSSE, 3000); };
+  }
+
+  function poll() {
+    fetch('/api/hr', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function () {});
+  }
+
+  fetch('/api/hr', { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (d) { fetchedRev = -1; render(d); connectSSE(); })
+    .catch(function () { setTimeout(poll, 1500); });
+
+  setInterval(poll, 3000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>三盘仪表（横排 · 左大右两小）</title>
+<style>
+  :root {
+    --bg: #04070c;
+    --ink: #d9f2ff;
+    --dim: rgba(120, 175, 205, .55);
+    --neon: #00e5ff;
+    --pink: #ff2d95;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+  }
+  #hud {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(120% 120% at 50% 0%, rgba(10, 26, 42, .55), transparent 70%);
+  }
+
+  .shell {
+    position: relative;
+    padding: 10px 16px 6px;
+    background: linear-gradient(180deg, rgba(12, 30, 48, .34), rgba(4, 9, 16, .62));
+    border: 1px solid rgba(0, 229, 255, .18);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    box-shadow: inset 0 0 40px rgba(0, 229, 255, .06);
+  }
+
+  .ver{position:absolute;right:10px;top:6px;font-size:11px;letter-spacing:1px;color:#00e5ff;opacity:.7;z-index:9}
+  .stage { --big: min(34vw, 380px); display: flex; align-items: flex-end; justify-content: center; gap: 0; }
+  /* 三个盘前后咬住：后一个压住前一个的右缘 */
+  .stage > .unit + .unit { margin-left: -6px; }
+  .stage > .unit:nth-child(1) { z-index: 3; }
+  .stage > .unit:nth-child(2) { z-index: 4; }
+  .stage > .unit:nth-child(3) { z-index: 5; }
+  .unit { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .gauge { display: block; width: 100%; height: auto; overflow: visible; }
+  #gHr { width: var(--big); }
+  #gBatt, #gGame { width: calc(var(--big) * 0.8); }
+
+  /* ── 盘面 ── */
+  .outer { fill: none; stroke: rgba(0, 229, 255, .14); stroke-width: 2; }
+  .outer2 { fill: none; stroke: rgba(255, 45, 149, .16); stroke-width: 1; stroke-dasharray: 2 10; }
+  .track { fill: none; stroke: rgba(120, 175, 205, .16); stroke-width: 12; stroke-linecap: round; }
+  .fill { fill: none; stroke-width: 6; stroke-linecap: round; transition: stroke .3s; }
+  .fillglow { fill: none; stroke-width: 14; stroke-linecap: round; opacity: .55; filter: blur(6px); }
+  .tick { stroke: rgba(140, 190, 215, .32); stroke-width: 1.2; }
+  .tick.major { stroke: rgba(190, 235, 255, .66); stroke-width: 1.8; }
+  .tlabel { fill: rgba(140, 190, 215, .62); font: 11px/1 "Consolas", monospace; text-anchor: middle; dominant-baseline: middle; }
+  .hub { fill: #061018; stroke: rgba(0, 229, 255, .45); stroke-width: 1.5; }
+  .hubdot { fill: var(--neon); }
+  .num { font: 700 62px/1 "Consolas", monospace; text-anchor: middle; fill: #e8fbff;
+         filter: drop-shadow(0 0 10px rgba(0, 229, 255, .45)); }
+  .num.small { font-size: 40px; }
+  .unitlab { font: 12px/1 "Consolas", monospace; text-anchor: middle; fill: rgba(0, 229, 255, .78);
+             letter-spacing: .18em; }
+  .unitlab.small { font-size: 10px; letter-spacing: .1em; }
+  .cap { text-align: center; font: 11px/1 "Consolas", monospace; letter-spacing: .22em;
+         color: rgba(120, 175, 205, .62); margin-top: -4px; }
+
+  .zseg { fill: none; stroke-width: 5.5; opacity: .34; transition: opacity .2s, stroke-width .2s; }
+  .zseg.lit { opacity: 1; stroke-width: 7.5; }
+  .needle polygon { filter: drop-shadow(0 0 6px currentColor); }
+
+  #hrPing { transform-origin: 200px 200px; transform: scale(.2); opacity: 0; }
+  #hrPing.on { animation: ping var(--beat, 1.2s) cubic-bezier(.2, .7, .3, 1) 1; }
+  @keyframes ping {
+    0% { transform: scale(.25); opacity: .5; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  .blink { animation: blink 1.4s steps(2, end) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  body.still * { animation: none !important; transition: none !important; }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="shell">
+    <div class="ver">V4 4/5</div>
+  <div class="stage">
+      <!-- 左：心率（大） -->
+      <div class="unit">
+        <svg class="gauge" id="gHr" viewBox="0 0 400 400">
+          <circle class="outer" cx="200" cy="200" r="186" />
+          <circle class="outer2" cx="200" cy="200" r="176" />
+          <g id="hrZones"></g>
+          <path class="track" id="hrTrack" pathLength="100" />
+          <path class="fillglow" id="hrGlow" pathLength="100" />
+          <path class="fill" id="hrFill" pathLength="100" />
+          <g id="hrTicks"></g>
+          <g id="hrLabels"></g>
+          <g class="needle" id="hrNeedle">
+            <polygon id="hrNeedleShape" points="195,206 200,74 205,206 200,216" fill="#ff2b4e" />
+          </g>
+          <circle id="hrPing" cx="200" cy="200" r="58" fill="none" stroke="#2bff88" stroke-width="2" />
+          <circle class="hub" cx="200" cy="200" r="15" />
+          <circle class="hubdot" cx="200" cy="200" r="4.5" />
+          <text class="num" id="hrNum" x="200" y="296" text-anchor="middle">--</text>
+          <text class="unitlab" id="hrUnit" x="200" y="322" text-anchor="middle" textLength="26" lengthAdjust="spacing">BPM</text>
+        </svg>
+        <div class="cap" id="hrCap">心率 · PULSE</div>
+      </div>
+
+      <!-- 右中：电量 -->
+      <div class="unit">
+          <svg class="gauge" id="gBatt" viewBox="0 0 400 400">
+            <circle class="outer" cx="200" cy="200" r="186" />
+            <g id="btZones"></g>
+            <path class="track" id="btTrack" pathLength="100" />
+            <path class="fillglow" id="btGlow" pathLength="100" />
+            <path class="fill" id="btFill" pathLength="100" />
+            <g id="btTicks"></g>
+            <g id="btLabels"></g>
+            <g class="needle" id="btNeedle">
+              <polygon id="btNeedleShape" points="193,206 200,88 207,206 200,214" fill="#2bff88" />
+            </g>
+            <circle class="hub" cx="200" cy="200" r="14" />
+            <circle class="hubdot" cx="200" cy="200" r="4" />
+            <text class="num small" id="btNum" x="200" y="300" text-anchor="middle">--</text>
+            <text class="unitlab small" id="btUnit" x="200" y="324" text-anchor="middle" textLength="28" lengthAdjust="spacing">%</text>
+          </svg>
+          <div class="cap" id="btCap">剩余电量</div>
+        </div>
+
+        <div class="unit">
+          <svg class="gauge" id="gGame" viewBox="0 0 400 400">
+            <circle class="outer" cx="200" cy="200" r="186" />
+            <g id="gmZones"></g>
+            <path class="track" id="gmTrack" pathLength="100" />
+            <path class="fillglow" id="gmGlow" pathLength="100" />
+            <path class="fill" id="gmFill" pathLength="100" />
+            <g id="gmTicks"></g>
+            <g id="gmLabels"></g>
+            <g class="needle" id="gmNeedle">
+              <polygon id="gmNeedleShape" points="193,206 200,88 207,206 200,214" fill="#00e5ff" />
+            </g>
+            <circle class="hub" cx="200" cy="200" r="14" />
+            <circle class="hubdot" cx="200" cy="200" r="4" />
+            <text class="num small" id="gmNum" x="200" y="300" text-anchor="middle">--</text>
+            <text class="unitlab small" id="gmUnit" x="200" y="324" text-anchor="middle" textLength="70" lengthAdjust="spacing">HOURS</text>
+          </svg>
+          <div class="cap" id="gmCap">游戏时长</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  if (/[?&]still=1/.test(location.search)) document.body.classList.add('still');
+
+  var CX = 200, CY = 200;
+  var START = -135, SWEEP = 270;
+
+  function polar(deg, r) {
+    var rad = (deg - 90) * Math.PI / 180;
+    return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+  }
+  function arcPath(r) {
+    var a = polar(START, r), b = polar(START + SWEEP, r);
+    return 'M ' + a[0].toFixed(2) + ' ' + a[1].toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 1 1 ' + b[0].toFixed(2) + ' ' + b[1].toFixed(2);
+  }
+  function arcSeg(a0, a1, r) {
+    var p0 = polar(a0, r), p1 = polar(a1, r);
+    var large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+    return 'M ' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+  }
+
+  // ── 心率 7 档 ──
+  var HR_ZONES = [
+    { max: 9.999, color: '#8b93a1' }, { max: 20.999, color: '#2bff88' },
+    { max: 40.999, color: '#2ea8ff' }, { max: 60.999, color: '#a45bff' },
+    { max: 80.999, color: '#ffd60a' }, { max: 99.999, color: '#ff8a1e' },
+    { max: 1e9, color: '#ff2b4e' }
+  ];
+  function hrZone(v) {
+    for (var i = 0; i < HR_ZONES.length; i++) if (v <= HR_ZONES[i].max) return HR_ZONES[i];
+    return HR_ZONES[HR_ZONES.length - 1];
+  }
+  function battColor(v) {
+    if (v < 10) return '#ff2b4e';
+    if (v < 25) return '#ff8a1e';
+    if (v < 50) return '#ffd60a';
+    if (v < 75) return '#2bff88';
+    return '#00e5ff';
+  }
+  // 游戏时长：相对「满格小时数」的比例上色
+  function gameColor(ratio) {
+    if (ratio < .25) return '#2bff88';
+    if (ratio < .5) return '#ffd60a';
+    if (ratio < .75) return '#ff8a1e';
+    return '#ff2b4e';
+  }
+
+  function makeGauge(prefix, opt) {
+    var R = opt.r;
+    var track = document.getElementById(prefix + 'Track');
+    var fill = document.getElementById(prefix + 'Fill');
+    var glow = document.getElementById(prefix + 'Glow');
+    var needle = document.getElementById(prefix + 'Needle');
+    var shape = document.getElementById(prefix + 'NeedleShape');
+    var ticks = document.getElementById(prefix + 'Ticks');
+    var labels = document.getElementById(prefix + 'Labels');
+
+    var d = arcPath(R);
+    [track, fill, glow].forEach(function (p) { p.setAttribute('d', d); });
+    fill.setAttribute('stroke-dasharray', '0 100');
+    glow.setAttribute('stroke-dasharray', '0 100');
+
+    var n = opt.ticks, step = SWEEP / n, NS = 'http://www.w3.org/2000/svg';
+    // 刻度数字：整数就写整数，带小数才写一位小数（以前一律 Math.round，会出现 0/1/1/2/3/3 这种重复）
+    function fmtTick(v, oneStep) {
+      if (Math.abs(oneStep - Math.round(oneStep)) < 1e-9) return String(Math.round(v));
+      return (Math.round(v * 10) / 10).toFixed(1);
+    }
+    for (var i = 0; i <= n; i++) {
+      var deg = START + step * i;
+      var major = (i % opt.majorEvery === 0);
+      var p1 = polar(deg, R - 13), p2 = polar(deg, R - (major ? 30 : 21));
+      var ln = document.createElementNS(NS, 'line');
+      ln.setAttribute('x1', p1[0].toFixed(1)); ln.setAttribute('y1', p1[1].toFixed(1));
+      ln.setAttribute('x2', p2[0].toFixed(1)); ln.setAttribute('y2', p2[1].toFixed(1));
+      ln.setAttribute('class', 'tick' + (major ? ' major' : ''));
+      ticks.appendChild(ln);
+      if (major && opt.max > 0) {
+        var lab = document.createElementNS(NS, 'text');
+        var pos = polar(deg, R - 46);
+        lab.setAttribute('x', pos[0].toFixed(1));
+        lab.setAttribute('y', pos[1].toFixed(1));
+        lab.setAttribute('class', 'tlabel');
+        lab.textContent = fmtTick(opt.max * i / n, opt.max * opt.majorEvery / n);
+        labels.appendChild(lab);
+      }
+    }
+
+    return {
+      max: opt.max,
+      setMax: function (m) {
+        this.max = m;
+        // 刻度数字跟着满格值变（步长带小数就保留一位，不然会出现重复数字）
+        var texts = labels.querySelectorAll('text');
+        var oneStep = m * opt.majorEvery / n;
+        for (var k = 0; k < texts.length; k++) {
+          texts[k].textContent = fmtTick(m * (k * opt.majorEvery) / n, oneStep);
+        }
+      },
+      set: function (value, color) {
+        var v = Math.max(0, Math.min(this.max, value == null ? 0 : value));
+        var pct = this.max > 0 ? (v / this.max) * 100 : 0;
+        var deg = START + (this.max > 0 ? (v / this.max) : 0) * SWEEP;
+        fill.setAttribute('stroke', color);
+        glow.setAttribute('stroke', color);
+        fill.setAttribute('stroke-dasharray', pct.toFixed(2) + ' 100');
+        glow.setAttribute('stroke-dasharray', pct.toFixed(2) + ' 100');
+        needle.setAttribute('transform', 'rotate(' + deg.toFixed(2) + ' ' + CX + ' ' + CY + ')');
+        shape.setAttribute('fill', color);
+        shape.style.color = color;
+      }
+    };
+  }
+
+  function drawZoneRing(hostId, segs, max, r) {
+    var host = document.getElementById(hostId), NS = 'http://www.w3.org/2000/svg';
+    var out = [];
+    segs.forEach(function (s) {
+      var a0 = START + (s[0] / max) * SWEEP;
+      var a1 = START + (s[1] / max) * SWEEP;
+      var p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', arcSeg(a0 + 0.6, a1 - 0.6, r));
+      p.setAttribute('class', 'zseg');
+      p.setAttribute('stroke', s[2]);
+      p.dataset.from = s[0];
+      host.appendChild(p);
+      out.push(p);
+    });
+    return out;
+  }
+  function paintZoneRing(paths, value) {
+    var v = (value == null || isNaN(value)) ? -1 : value;
+    paths.forEach(function (p) {
+      var lit = v >= 0 && v >= parseFloat(p.dataset.from);
+      p.classList.toggle('lit', lit);
+      p.style.filter = lit ? 'drop-shadow(0 0 5px ' + p.getAttribute('stroke') + ')' : 'none';
+    });
+  }
+
+  // ── 三个盘 ──
+  var hrGauge = makeGauge('hr', { r: 152, ticks: 40, majorEvery: 4, max: 200 });
+  var btGauge = makeGauge('bt', { r: 152, ticks: 20, majorEvery: 4, max: 100 });
+  var gmGauge = makeGauge('gm', { r: 152, ticks: 24, majorEvery: 6, max: 4 });
+
+  var hrZoneEls = drawZoneRing('hrZones', [
+    [0, 10, '#8b93a1'], [10, 21, '#2bff88'], [21, 41, '#2ea8ff'],
+    [41, 61, '#a45bff'], [61, 81, '#ffd60a'], [81, 100, '#ff8a1e'],
+    [100, 200, '#ff2b4e']
+  ], 200, 168);
+
+  var btZoneEls = drawZoneRing('btZones', [
+    [0, 10, '#ff2b4e'], [10, 25, '#ff8a1e'], [25, 50, '#ffd60a'],
+    [50, 75, '#2bff88'], [75, 100, '#00e5ff']
+  ], 100, 168);
+
+  var gmZoneEls = drawZoneRing('gmZones', [
+    [0, 25, '#2bff88'], [25, 50, '#ffd60a'], [50, 75, '#ff8a1e'], [75, 100, '#ff2b4e']
+  ], 100, 168);
+
+  var lastBeat = 0;
+
+  function fmtHM(sec) {
+    var s = Math.max(0, Math.round(sec));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h > 0 ? (h + ':' + (m < 10 ? '0' + m : m)) : (m + 'm');
+  }
+
+  function renderHR(d) {
+    var bpm = d.bpm, num = document.getElementById('hrNum');
+    if (bpm) {
+      var z = hrZone(bpm);
+      num.textContent = Math.round(bpm);
+      num.style.fill = z.color;
+      num.style.color = z.color;
+      hrGauge.set(bpm, z.color);
+      paintZoneRing(hrZoneEls, bpm);
+      if (d.ts && d.ts !== lastBeat) {
+        lastBeat = d.ts;
+        num.classList.remove('beat');
+        void num.getBBox();
+        num.classList.add('beat');
+        var ping = document.getElementById('hrPing');
+        ping.setAttribute('stroke', z.color);
+        var t = Math.max(0, Math.min(1, (bpm - 50) / 90));
+        var dur = 1.9 * Math.pow(0.36 / 1.9, t);
+        ping.style.setProperty('--beat', dur.toFixed(2) + 's');
+        ping.classList.remove('on');
+        void ping.getBoundingClientRect();
+        ping.classList.add('on');
+      }
+      num.classList.remove('blink');
+    } else {
+      num.textContent = '--';
+      num.style.fill = '#5d6b7d';
+      num.style.color = '#5d6b7d';
+      hrGauge.set(0, '#5d6b7d');
+      paintZoneRing(hrZoneEls, null);
+      num.classList.add('blink');
+    }
+  }
+
+  function renderBatt(d) {
+    var num = document.getElementById('btNum');
+    if (d.battery != null) {
+      var c = battColor(d.battery);
+      num.textContent = Math.round(d.battery);
+      num.style.fill = c; num.style.color = c;
+      btGauge.set(d.battery, c);
+      paintZoneRing(btZoneEls, d.battery);
+      num.classList.remove('blink');
+    } else {
+      num.textContent = '--';
+      num.style.fill = '#5d6b7d'; num.style.color = '#5d6b7d';
+      btGauge.set(0, '#5d6b7d');
+      paintZoneRing(btZoneEls, null);
+      num.classList.add('blink');
+    }
+  }
+
+  function renderGame(g) {
+    var num = document.getElementById('gmNum');
+    var unit = document.getElementById('gmUnit');
+    var cap = document.getElementById('gmCap');
+    if (!g || !g.process) {
+      num.textContent = '--';
+      num.style.fill = '#5d6b7d'; num.style.color = '#5d6b7d';
+      gmGauge.set(0, '#5d6b7d');
+      paintZoneRing(gmZoneEls, null);
+      unit.textContent = '未选游戏';
+      cap.textContent = '游戏时长';
+      return;
+    }
+    var hours = Math.max(0.5, Number(g.ring_hours) || 4);
+    gmGauge.setMax(hours);
+    var sec = Number(g.elapsed || 0);
+    var ratio = sec / (hours * 3600);
+    if (g.running) {
+      var c = gameColor(ratio);
+      num.textContent = fmtHM(sec);
+      num.style.fill = c; num.style.color = c;
+      gmGauge.set(Math.min(hours, sec / 3600), c);
+      paintZoneRing(gmZoneEls, Math.min(100, ratio * 100));
+      unit.textContent = '运行中';
+      unit.style.fill = c;
+    } else {
+      num.textContent = '0m';
+      num.style.fill = '#5d6b7d'; num.style.color = '#5d6b7d';
+      gmGauge.set(0, '#5d6b7d');
+      paintZoneRing(gmZoneEls, null);
+      unit.textContent = '未运行';
+      unit.style.fill = 'rgba(0,229,255,.5)';
+    }
+    cap.textContent = '游戏时长 · ' + (g.process || '');
+  }
+
+  function pollHR() {
+    fetch('/api/hr', { cache: 'no-store' }).then(function (r) { return r.json(); })
+      .then(function (d) { renderHR(d); renderBatt(d); })
+      .catch(function () { });
+  }
+  function pollGame() {
+    fetch('/api/game', { cache: 'no-store' }).then(function (r) { return r.json(); })
+      .then(renderGame).catch(function () { });
+  }
+
+  // SSE 优先（心率能秒到），断了退回轮询
+  var es = null;
+  function connectSSE() {
+    try {
+      es = new EventSource('/events');
+      es.onmessage = function (ev) {
+        try { var d = JSON.parse(ev.data); renderHR(d); renderBatt(d); } catch (e) { }
+      };
+      es.onerror = function () { try { es.close(); } catch (e) { } es = null; setTimeout(connectSSE, 2500); };
+    } catch (e) { }
+  }
+  connectSSE();
+  pollHR(); pollGame();
+  setInterval(pollHR, 3000);
+  setInterval(pollGame, 2000);
+})();
+</script>
+</body>
+</html>

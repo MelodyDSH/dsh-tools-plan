@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>赛博仪表盘</title>
+<style>
+  :root {
+    --cy: #00e5ff;
+    --mg: #ff2d95;
+    --ink: #05070d;
+    --grid: rgba(0, 229, 255, .07);
+    /* 宽六边形：左右两个尖，上下两条长边。
+       尖的深度 = --nose，上下边从表盘外沿（= --pad-x）开始，所以框是真的"贴着"盘。 */
+    --nose: 34px;
+    --pad-x: 38px;
+    --hex: polygon(0% 50%, var(--nose) 0, calc(100% - var(--nose)) 0, 100% 50%,
+                   calc(100% - var(--nose)) 100%, var(--nose) 100%);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #d7e8f5;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(1000px 700px at 50% 42%, rgba(9, 24, 40, .96), rgba(3, 6, 12, .98) 62%),
+      linear-gradient(180deg, #04070d, #020306);
+  }
+  /* 网格 + 扫描线 */
+  body::before,
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+  }
+  body::before {
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 46px 46px, 46px 46px;
+    mask-image: radial-gradient(circle at 50% 50%, #000 30%, transparent 78%);
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 30%, transparent 78%);
+    animation: drift 18s linear infinite;
+  }
+  body::after {
+    background: repeating-linear-gradient(0deg, rgba(180, 235, 255, .045) 0 1px, transparent 1px 3px);
+    mix-blend-mode: overlay;
+  }
+  @keyframes drift { from { background-position: 0 0, 0 0; } to { background-position: 46px 46px, 46px 46px; } }
+
+  #hud { position: relative; z-index: 2; padding: 10px; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    font: 11px/1 "Consolas", "Courier New", monospace; letter-spacing: .22em;
+    color: rgba(0, 229, 255, .72); margin: 0 6px 10px;
+  }
+  .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #2bff88; box-shadow: 0 0 10px #2bff88; margin-right: 8px;
+    animation: blink 1.6s steps(2, end) infinite;
+  }
+  @keyframes blink { 50% { opacity: .25; } }
+
+  .stage { display: flex; align-items: center; justify-content: center; gap: clamp(8px, .9vw, 14px); }
+  .unit {
+    position: relative;
+    padding: clamp(6px, 1vw, 14px);
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(10, 26, 42, .62), rgba(4, 9, 16, .78));
+    border: 1px solid rgba(0, 229, 255, .22);
+    box-shadow:
+      inset 0 0 46px rgba(0, 229, 255, .07),
+      0 0 26px rgba(0, 229, 255, .08),
+      0 14px 40px rgba(0, 0, 0, .55);
+  }
+  /* 四角装饰 */
+  .unit .br {
+    position: absolute; width: 16px; height: 16px; border: 2px solid var(--cy); opacity: .65;
+  }
+  .unit .br.tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-radius: 6px 0 0 0; }
+  .unit .br.tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; border-radius: 0 6px 0 0; }
+  .unit .br.bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; border-radius: 0 0 0 6px; }
+  .unit .br.brr { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-radius: 0 0 6px 0; }
+
+  .gauge { display: block; width: clamp(196px, 19vw, 296px); height: auto; overflow: visible; }
+  .divider {
+    width: 2px; align-self: stretch; margin: 14px 0;
+    background: linear-gradient(180deg, transparent, rgba(0, 229, 255, .5), rgba(255, 45, 149, .4), transparent);
+    box-shadow: 0 0 14px rgba(0, 229, 255, .35);
+  }
+
+  .track { fill: none; stroke: rgba(140, 190, 220, .13); stroke-width: 13; stroke-linecap: round; }
+  .zseg { fill: none; stroke-width: 5.5; opacity: .34; transition: opacity .2s, stroke-width .2s; }
+  .zseg.lit { opacity: 1; stroke-width: 7.5; }
+  .fill {
+    fill: none; stroke-width: 13; stroke-linecap: round;
+    transition: stroke-dasharray .28s cubic-bezier(.3, .9, .2, 1), stroke .4s ease;
+  }
+  .fillglow { fill: none; stroke-width: 22; stroke-linecap: round; opacity: .28; filter: url(#soft); }
+  .tick { stroke: rgba(150, 205, 235, .45); stroke-width: 1.6; }
+  .tick.major { stroke: rgba(0, 229, 255, .8); stroke-width: 2.6; }
+  .tlabel {
+    fill: rgba(170, 215, 240, .55); font: 10px "Consolas", monospace; letter-spacing: .06em;
+    text-anchor: middle; dominant-baseline: middle;
+  }
+  .needle polygon { transition: none; }
+  .needle { transition: transform .22s cubic-bezier(.25, 1.4, .35, 1); }
+  .hub { fill: #0a1420; stroke: rgba(0, 229, 255, .55); stroke-width: 2; }
+  .hubdot { fill: var(--cy); }
+  .outer { fill: none; stroke: rgba(0, 229, 255, .16); stroke-width: 1; stroke-dasharray: 2 9; }
+  .outer2 { fill: none; stroke: rgba(255, 45, 149, .16); stroke-width: 1; stroke-dasharray: 1 14; }
+
+  .num {
+    font: 700 54px/1 "Consolas", "Courier New", monospace;
+    letter-spacing: .02em; fill: #eaf6ff;
+    filter: drop-shadow(-1.6px 0 rgba(255, 45, 149, .55))
+            drop-shadow(1.6px 0 rgba(0, 229, 255, .55))
+            drop-shadow(0 0 14px currentColor);
+  }
+  #hrPing { transform-origin: 200px 200px; transform: scale(.2); opacity: 0; }
+  /* 涟漪一圈的时长跟着心率走：快心跳 → 短动画，慢心跳 → 长动画（JS 写 --beat） */
+  #hrPing.on { animation: ping var(--beat, 1.2s) cubic-bezier(.2, .7, .3, 1) 1; }
+  @keyframes ping {
+    0% { transform: scale(.25); opacity: .55; }
+    100% { transform: scale(2.3); opacity: 0; }
+  }
+  .unitlab {
+    font: 11px/1 "Consolas", monospace;
+    fill: rgba(0, 229, 255, .78);
+  }
+  .beat { animation: pop .16s ease-out; }
+  @keyframes pop { from { transform: scale(1); } 45% { transform: scale(1.055); } to { transform: scale(1); } }
+
+  .nosig { animation: blink 1s steps(2, end) infinite; }
+
+  /* ===== 宽六边形中控台（紧贴两个表盘外壳） ===== */
+  .shell { display: inline-flex; flex-direction: column; gap: 5px; align-items: stretch; }
+  .console {
+    position: relative;
+    padding: 6px var(--pad-x);
+    isolation: isolate;
+    animation: glitch 9.4s steps(1, end) infinite;
+  }
+  /* 偶尔的撕裂抖动 */
+  @keyframes glitch {
+    0%, 87%, 100% { transform: none; }
+    88% { transform: translate(-4px, 1px) skewX(-.7deg); }
+    88.5% { transform: translate(3px, -2px) skewX(.5deg); }
+    89% { transform: translate(-1px, 1px); }
+    89.5% { transform: none; }
+    95.4% { transform: translate(2px, 0) skewX(.3deg); }
+    95.9% { transform: none; }
+  }
+  /* 外圈霓虹：品红 → 紫 → 青 → 酸绿 */
+  .console::before {
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    background: linear-gradient(150deg,
+      #ff2d95 0%,
+      #7b2dff 20%,
+      #00e5ff 42%,
+      #c6ff00 58%,
+      #ff2d95 76%,
+      #7b2dff 92%,
+      #00e5ff 100%);
+    clip-path: var(--hex);
+    filter: drop-shadow(0 0 10px rgba(255, 45, 149, .55))
+            drop-shadow(0 0 34px rgba(123, 45, 255, .38))
+            drop-shadow(0 0 70px rgba(0, 229, 255, .20));
+  }
+  /* 台面 */
+  .console::after {
+    content: ""; position: absolute; inset: 3px; z-index: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(120, 235, 255, .035) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 170% at 50% -18%, rgba(0, 229, 255, .15), transparent 62%),
+      linear-gradient(180deg, rgba(9, 23, 38, .968), rgba(3, 6, 11, .986));
+    clip-path: var(--hex);
+  }
+  .console > * { position: relative; z-index: 2; }
+  /* 六个顶点的小铆钉 */
+  .bolts { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .bolts b {
+    position: absolute; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+    background: #bffcff; border-radius: 50%;
+    box-shadow: 0 0 8px rgba(0, 229, 255, .95), 0 0 16px rgba(0, 229, 255, .45);
+  }
+  .bolts b:nth-child(1) { left: 0%; top: 50%; }
+  .bolts b:nth-child(2) { left: var(--nose); top: 0%; }
+  .bolts b:nth-child(3) { left: calc(100% - var(--nose)); top: 0%; }
+  .bolts b:nth-child(4) { left: 100%; top: 50%; }
+  .bolts b:nth-child(5) { left: calc(100% - var(--nose)); top: 100%; }
+  .bolts b:nth-child(6) { left: var(--nose); top: 100%; }
+
+  .cs-top, .cs-bot {
+    display: flex; align-items: center; justify-content: space-between;
+    font: 11px/1 "Consolas", monospace; letter-spacing: .22em;
+  }
+  .cs-top {
+    color: rgba(0, 229, 255, .8);
+    padding: 0 2px 5px;
+  }
+  .cs-top .mid { color: rgba(255, 45, 149, .62); letter-spacing: .34em; font-size: 10px; }
+  .cs-bot {
+    color: rgba(125, 178, 208, .52); font-size: 10px; letter-spacing: .18em;
+    padding: 4px 2px 0;
+  }
+  /* 中控台两侧斜切通风口 */
+  .vent {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 11px; height: 62px; z-index: 1; opacity: .75;
+  }
+  .vent.l { left: 4px; }
+  .vent.r { right: 4px; }
+  .vent i {
+    position: absolute; left: 0; right: 0; height: 2px; display: block;
+    background: linear-gradient(90deg, transparent, rgba(0, 229, 255, .55), transparent);
+  }
+  .vent i:nth-child(1) { top: 12%; } .vent i:nth-child(2) { top: 30%; }
+  .vent i:nth-child(3) { top: 48%; } .vent i:nth-child(4) { top: 66%; }
+  .vent i:nth-child(5) { top: 84%; }
+
+  /* —— 朋克零件 —— */
+  /* 扫过的光带 */
+
+  /* 扫过的光带 */
+  .beamwrap {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    clip-path: var(--hex); overflow: hidden;
+  }
+  .beam {
+    position: absolute; left: -10%; width: 120%; height: 110px;
+    background: linear-gradient(180deg,
+      transparent, rgba(0, 229, 255, .10) 42%, rgba(255, 45, 149, .16) 58%, transparent);
+    animation: beam 7s linear infinite;
+  }
+  @keyframes beam { from { top: -120px; } to { top: 100%; } }
+
+  /* 黄黑警示条 */
+  .cs-top .hazard {
+    display: inline-block; flex: 0 0 auto; height: 6px; width: 62px;
+    transform: skewX(-18deg); margin: 0 12px;
+    background: repeating-linear-gradient(45deg, #ffd60a 0 7px, #140d02 7px 14px);
+    opacity: .7; box-shadow: 0 0 14px rgba(255, 214, 10, .35);
+  }
+  /* 竖排小字（左尖角内侧） */
+  .vlabel {
+    position: absolute; left: 12px; top: 50%; z-index: 3;
+    writing-mode: vertical-rl; transform: translateY(-50%) rotate(180deg);
+    font: 9px/1 "Consolas", monospace; letter-spacing: .38em;
+    color: rgba(198, 255, 0, .55);
+  }
+  /* 破损缺口：用底色块吃掉几段边框 */
+
+  /* 破损缺口：用底色块吃掉几段边框 */
+  .notch { position: absolute; z-index: 4; background: #04070d; pointer-events: none; }
+  .notch.n1 { top: -2px; left: 23%; width: 44px; height: 7px; transform: skewX(-42deg); }
+  .notch.n2 { bottom: -2px; right: 30%; width: 66px; height: 7px; transform: skewX(-42deg); }
+  .notch.n3 { top: 46%; right: -3px; width: 10px; height: 26px; transform: skewY(-38deg); }
+
+  /* 底部跑马灯 */
+  .ticker {
+    position: relative; height: 18px;
+    overflow: hidden; margin-top: 2px; padding-top: 4px; z-index: 2;
+    border-top: 1px dashed rgba(255, 45, 149, .22);
+  }
+  .ticker span {
+    position: absolute; left: 0; top: 5px;
+    display: inline-block; white-space: nowrap;
+    font: 9px/1 "Consolas", monospace; letter-spacing: .34em;
+    color: rgba(198, 255, 0, .40);
+    animation: tick 30s linear infinite;
+  }
+  @keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* 数字偶尔闪一下 */
+  .num { animation: numflick 6.3s steps(1, end) infinite; }
+  @keyframes numflick {
+    0%, 94%, 100% { opacity: 1; }
+    94.4% { opacity: .35; }
+    94.8% { opacity: 1; }
+    95.2% { opacity: .55; }
+    95.6% { opacity: 1; }
+  }
+  /* 需要完全静止（录屏/省电/直播被骂太晃）时加 ?still=1 */
+  body.still .console, body.still .num, body.still .beam,
+  body.still .ticker span, body.still .dot, body.still #hrPing { animation: none !important; }
+  body.still .beam { display: none; }
+  .console .stage { justify-content: center; }
+  .console .unit {
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(8, 22, 36, .5), rgba(3, 8, 14, .62));
+    border-color: rgba(0, 229, 255, .14);
+    box-shadow: inset 0 0 40px rgba(0, 229, 255, .05), 0 10px 30px rgba(0, 0, 0, .45);
+  }
+  /* 中间信息块（未来加东西就长在这儿） */
+  .info {
+    position: relative; align-self: stretch;
+    display: flex; flex-direction: column; justify-content: center; gap: 7px;
+    padding: 14px 12px;
+    min-width: clamp(112px, 11.5vw, 152px);
+    background: linear-gradient(180deg, rgba(12, 30, 48, .74), rgba(4, 9, 16, .88));
+    border: 1px solid rgba(255, 45, 149, .24);
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    box-shadow: inset 0 0 34px rgba(255, 45, 149, .07);
+  }
+  .info::after {
+    content: ""; position: absolute; left: 12px; right: 12px; top: 30px; height: 1px;
+    background: linear-gradient(90deg, rgba(255, 45, 149, .45), transparent);
+  }
+  .info h4 {
+    margin: 0 0 4px; font: 9px/1 "Consolas", monospace;
+    letter-spacing: .3em; color: rgba(255, 45, 149, .8);
+  }
+  .irow {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+    font: 10px/1.2 "Consolas", monospace; letter-spacing: .08em;
+  }
+  .irow span { color: rgba(120, 175, 205, .62); }
+  .irow b { color: #d9f2ff; font-weight: 400; }
+  .irow b.dev { font-size: 9px; letter-spacing: 0; text-align: right; max-width: 96px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .irow.sub span { color: rgba(198, 255, 0, .42); font-size: 8px; letter-spacing: .22em; }
+  .spark { width: 100%; height: 46px; margin-top: auto; display: block; }
+  .spark path { fill: none; stroke: #2bff88; stroke-width: 1.8; stroke-linejoin: round; }
+  .footer {
+    display: flex; justify-content: space-between;
+    font: 10px/1 "Consolas", monospace; letter-spacing: .18em;
+    color: rgba(120, 175, 205, .5); margin: 10px 8px 0;
+  }
+  @media (max-width: 720px) {
+    .gauge { width: min(64vw, 300px); }
+    .stage { gap: 6px; }
+    .info { min-width: 96px; padding: 10px 8px; }
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+ <div class="shell">
+  <div class="cs-top">
+    <span><span class="dot"></span>VITALS</span>
+    <span class="mid">▚ MK-IV // CLUSTER 01 ▞</span>
+    <span class="hazard"></span>
+    <span id="clock">--:--:--</span>
+  </div>
+
+  <div class="console">
+  <div class="beamwrap"><div class="beam"></div></div>
+  <div class="bolts"><b></b><b></b><b></b><b></b><b></b><b></b></div>
+  <div class="vlabel">PULSE · 脉搏</div>
+  <div class="notch n1"></div><div class="notch n2"></div><div class="notch n3"></div>
+  <div class="vent l"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="vent r"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div class="stage">
+    <!-- 左：心率 -->
+    <div class="unit">
+      <span class="br tl"></span><span class="br tr"></span><span class="br bl"></span><span class="br brr"></span>
+      <svg class="gauge" id="gHr" viewBox="0 0 400 400">
+        <defs>
+          <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+          <linearGradient id="gradHR" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#00e5ff" stop-opacity=".9" />
+            <stop offset="1" stop-color="#ff2d95" stop-opacity=".9" />
+          </linearGradient>
+        </defs>
+        <circle class="outer" cx="200" cy="200" r="186" />
+        <circle class="outer2" cx="200" cy="200" r="176" />
+        <g id="hrZones"></g>
+        <path class="track" id="hrTrack" pathLength="100" />
+        <path class="fillglow" id="hrGlow" pathLength="100" />
+        <path class="fill" id="hrFill" pathLength="100" />
+        <g id="hrTicks"></g>
+        <g id="hrLabels"></g>
+        <g class="needle" id="hrNeedle">
+          <polygon id="hrNeedleShape" points="195,206 200,74 205,206 200,216" fill="#ff2b4e" />
+        </g>
+        <circle id="hrPing" cx="200" cy="200" r="58" fill="none" stroke="#2bff88" stroke-width="2" />
+        <circle class="hub" cx="200" cy="200" r="15" />
+        <circle class="hubdot" cx="200" cy="200" r="4.5" />
+        <text class="num" id="hrNum" x="200" y="292" text-anchor="middle">--</text>
+        <text class="unitlab" id="hrUnit" x="200" y="318" text-anchor="middle" textLength="26" lengthAdjust="spacing">BPM</text>
+      </svg>
+    </div>
+
+    <div class="info">
+      <h4>▍TELEMETRY</h4>
+      <div class="irow"><span>DEV</span><b class="dev" id="iDev">--</b></div>
+      <div class="irow"><span>BATT</span><b id="iBatt">--</b></div>
+      <div class="irow"><span>RSSI</span><b id="iRssi">--</b></div>
+      <div class="irow"><span>SAMP</span><b id="iSamp">--</b></div>
+      <div class="irow"><span>LINK</span><b id="iLink">--</b></div>
+      <svg class="spark" id="spark" viewBox="0 0 140 44" preserveAspectRatio="none">
+        <path id="sparkPath" d="" />
+      </svg>
+      <div class="irow sub"><span id="iHint">BPM 趋势 · 近 40 次</span></div>
+    </div>
+
+    <!-- 右：电量 -->
+    <div class="unit">
+      <span class="br tl"></span><span class="br tr"></span><span class="br bl"></span><span class="br brr"></span>
+      <svg class="gauge" id="gBatt" viewBox="0 0 400 400">
+        <defs>
+          <filter id="soft2" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+        </defs>
+        <circle class="outer" cx="200" cy="200" r="186" />
+        <circle class="outer2" cx="200" cy="200" r="176" />
+        <g id="btZones"></g>
+        <path class="track" id="btTrack" pathLength="100" />
+        <path class="fillglow" id="btGlow" pathLength="100" filter="url(#soft2)" />
+        <path class="fill" id="btFill" pathLength="100" />
+        <g id="btTicks"></g>
+        <g id="btLabels"></g>
+        <g class="needle" id="btNeedle">
+          <polygon id="btNeedleShape" points="195,206 200,74 205,206 200,216" fill="#2bff88" />
+        </g>
+        <circle class="hub" cx="200" cy="200" r="15" />
+        <circle class="hubdot" cx="200" cy="200" r="4.5" />
+        <text class="num" id="btNum" x="200" y="292" text-anchor="middle">--</text>
+        <text class="unitlab" id="btUnit" x="200" y="318" text-anchor="middle" textLength="82" lengthAdjust="spacing">BATTERY %</text>
+      </svg>
+    </div>
+  </div>
+  </div>
+
+  <div class="cs-bot">
+    <span id="devline">DEV // --</span>
+    <span id="statline">LINK // SYNC</span>
+  </div>
+  <div class="ticker"><span>&nbsp;SYNC OK &nbsp;·&nbsp; RX 2.4G &nbsp;·&nbsp; SNR 24 dB &nbsp;·&nbsp; BLE 0x2A37 &nbsp;·&nbsp; SHARE-HR ON &nbsp;·&nbsp; NO RR DATA &nbsp;·&nbsp; SAMPLE -- &nbsp;·&nbsp; NO SIGNAL IS NOT FLATLINE &nbsp;·&nbsp; SYNC OK &nbsp;·&nbsp; RX 2.4G &nbsp;·&nbsp; SNR 24 dB &nbsp;·&nbsp; BLE 0x2A37 &nbsp;·&nbsp; SHARE-HR ON &nbsp;·&nbsp; NO RR DATA &nbsp;·&nbsp; SAMPLE -- &nbsp;·&nbsp; NO SIGNAL IS NOT FLATLINE &nbsp;·&nbsp;</span></div>
+ </div>
+</div>
+
+<script>
+(function () {
+  // ?still=1 → 关掉所有动效（录屏、省 GPU 用）
+  if (/[?&]still=1/.test(location.search)) document.body.classList.add('still');
+  var CX = 200, CY = 200, R = 152;
+  var START = -135, SWEEP = 270;
+
+  function polar(deg, r) {
+    var rad = (deg - 90) * Math.PI / 180;
+    return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+  }
+
+  function arcPath(r) {
+    var a = polar(START, r), b = polar(START + SWEEP, r);
+    return 'M ' + a[0].toFixed(2) + ' ' + a[1].toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 1 1 ' + b[0].toFixed(2) + ' ' + b[1].toFixed(2);
+  }
+
+  // 心率 7 档（阈值与配色可自行修改）
+  var HR_ZONES = [
+    { max: 9.999, color: '#8b93a1', name: '休眠' },
+    { max: 20.999, color: '#2bff88', name: '静默' },
+    { max: 40.999, color: '#2ea8ff', name: '平稳' },
+    { max: 60.999, color: '#a45bff', name: '专注' },
+    { max: 80.999, color: '#ffd60a', name: '热身' },
+    { max: 99.999, color: '#ff8a1e', name: '燃脂' },
+    { max: 1e9, color: '#ff2b4e', name: '极限' }
+  ];
+
+  function hrZone(v) {
+    for (var i = 0; i < HR_ZONES.length; i++) if (v <= HR_ZONES[i].max) return HR_ZONES[i];
+    return HR_ZONES[HR_ZONES.length - 1];
+  }
+
+  // 电量：按健康度分 5 段（跟心率同一套霓虹色）
+  function battColor(v) {
+    if (v < 10) return '#ff2b4e';
+    if (v < 25) return '#ff8a1e';
+    if (v < 50) return '#ffd60a';
+    if (v < 75) return '#2bff88';
+    return '#00e5ff';
+  }
+  function battZone(v) {
+    if (v < 10) return '告急';
+    if (v < 25) return '偏低';
+    if (v < 50) return '正常';
+    if (v < 75) return '充足';
+    return '满电';
+  }
+
+  function makeGauge(prefix, opt) {
+    var track = document.getElementById(prefix + 'Track');
+    var fill = document.getElementById(prefix + 'Fill');
+    var glow = document.getElementById(prefix + 'Glow');
+    var needle = document.getElementById(prefix + 'Needle');
+    var shape = document.getElementById(prefix + 'NeedleShape');
+    var ticks = document.getElementById(prefix + 'Ticks');
+    var labels = document.getElementById(prefix + 'Labels');
+
+    var d = arcPath(R);
+    [track, fill, glow].forEach(function (p) { p.setAttribute('d', d); });
+    fill.setAttribute('stroke-dasharray', '0 100');
+    glow.setAttribute('stroke-dasharray', '0 100');
+
+    var n = opt.ticks, step = SWEEP / n;
+    var svgNS = 'http://www.w3.org/2000/svg';
+    for (var i = 0; i <= n; i++) {
+      var deg = START + step * i;
+      var major = (i % opt.majorEvery === 0);
+      var p1 = polar(deg, R - 13), p2 = polar(deg, R - (major ? 30 : 21));
+      var ln = document.createElementNS(svgNS, 'line');
+      ln.setAttribute('x1', p1[0].toFixed(1)); ln.setAttribute('y1', p1[1].toFixed(1));
+      ln.setAttribute('x2', p2[0].toFixed(1)); ln.setAttribute('y2', p2[1].toFixed(1));
+      ln.setAttribute('class', 'tick' + (major ? ' major' : ''));
+      ticks.appendChild(ln);
+
+      if (major) {
+        var val = Math.round(opt.max * i / n);
+        var lab = document.createElementNS(svgNS, 'text');
+        var pos = polar(deg, R - 46);
+        lab.setAttribute('x', pos[0].toFixed(1));
+        lab.setAttribute('y', pos[1].toFixed(1));
+        lab.setAttribute('class', 'tlabel');
+        lab.textContent = val;
+        labels.appendChild(lab);
+      }
+    }
+
+    return {
+      set: function (value, color) {
+        var v = Math.max(0, Math.min(opt.max, value == null ? 0 : value));
+        var pct = (v / opt.max) * 100;
+        var deg = START + (v / opt.max) * SWEEP;
+        fill.setAttribute('stroke', color);
+        glow.setAttribute('stroke', color);
+        fill.setAttribute('stroke-dasharray', pct.toFixed(2) + ' 100');
+        glow.setAttribute('stroke-dasharray', pct.toFixed(2) + ' 100');
+        needle.setAttribute('transform', 'rotate(' + deg.toFixed(2) + ' ' + CX + ' ' + CY + ')');
+        shape.setAttribute('fill', color);
+        shape.style.filter = 'drop-shadow(0 0 6px ' + color + ')';
+      }
+    };
+  }
+
+  // 分档参考环：把 7 个档位的颜色淡淡铺一圈，像车上的转速区间
+  function arcSeg(a0, a1, r) {
+    var p0 = polar(a0, r), p1 = polar(a1, r);
+    var large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+    return 'M ' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+           ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+  }
+
+  function drawZoneRing(hostId, segs, max, r) {
+    var host = document.getElementById(hostId);
+    var NS = 'http://www.w3.org/2000/svg';
+    var out = [];
+    segs.forEach(function (s) {
+      var a0 = START + (s[0] / max) * SWEEP;
+      var a1 = START + (s[1] / max) * SWEEP;
+      var p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', arcSeg(a0 + 0.6, a1 - 0.6, r));
+      p.setAttribute('class', 'zseg');
+      p.setAttribute('stroke', s[2]);
+      p.dataset.from = s[0];
+      p.dataset.to = s[1];
+      host.appendChild(p);
+      out.push(p);
+    });
+    return out;
+  }
+
+  // 值走过的档位整段点亮（当前值所在的那一段也整段亮），每段用自己的颜色；
+  // 还没走到的那几段保持半透明，像车上的转速区间表。
+  function paintZoneRing(paths, value) {
+    var v = (value == null || isNaN(value)) ? -1 : value;
+    paths.forEach(function (p) {
+      var lit = v >= 0 && v >= parseFloat(p.dataset.from);
+      p.classList.toggle('lit', lit);
+      p.style.filter = lit ? 'drop-shadow(0 0 5px ' + p.getAttribute('stroke') + ')' : 'none';
+    });
+  }
+
+  var hrGauge = makeGauge('hr', { max: 200, ticks: 40, majorEvery: 4 });
+  var btGauge = makeGauge('bt', { max: 100, ticks: 20, majorEvery: 4 });
+
+  var hrZoneEls = drawZoneRing('hrZones', [
+    [0, 10, '#8b93a1'], [10, 21, '#2bff88'], [21, 41, '#2ea8ff'],
+    [41, 61, '#a45bff'], [61, 81, '#ffd60a'], [81, 100, '#ff8a1e'],
+    [100, 200, '#ff2b4e']
+  ], 200, 168);
+
+  var btZoneEls = drawZoneRing('btZones', [
+    [0, 10, '#ff2b4e'], [10, 25, '#ff8a1e'], [25, 50, '#ffd60a'],
+    [50, 75, '#2bff88'], [75, 100, '#00e5ff']
+  ], 100, 168);
+
+  // 单位标签用 textLength + lengthAdjust="spacing" 固定总宽：
+  // 字距自动摊到字与字之间，末尾不留空，text-anchor=middle 才能真的居中
+
+  var lastBeat = 0;
+  // —— 中间信息块：趋势折线 ——
+  var hist = [], sparkPath = document.getElementById('sparkPath');
+  function drawSpark(color) {
+    if (!sparkPath) return;
+    if (hist.length < 2) { sparkPath.setAttribute('d', ''); return; }
+    var lo = Math.min.apply(null, hist) - 4, hi = Math.max.apply(null, hist) + 4;
+    if (hi - lo < 14) { var m = (hi + lo) / 2; lo = m - 7; hi = m + 7; }
+    var W = 140, H = 44, dd = '';
+    for (var i = 0; i < hist.length; i++) {
+      var x = (i / (hist.length - 1)) * W;
+      var y = H - ((hist[i] - lo) / (hi - lo)) * (H - 8) - 4;
+      dd += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    }
+    sparkPath.setAttribute('d', dd);
+    sparkPath.style.stroke = color;
+  }
+
+  function render(d) {
+    var bpm = d.bpm;
+    var hrNum = document.getElementById('hrNum');
+
+    if (bpm) {
+      var z = hrZone(bpm);
+      hrNum.textContent = Math.round(bpm);
+      hrNum.style.fill = z.color;
+      hrNum.style.color = z.color;
+      hrGauge.set(bpm, z.color);
+      paintZoneRing(hrZoneEls, bpm);
+      if (d.ts && d.ts !== lastBeat) {
+        lastBeat = d.ts;
+        hist.push(bpm);
+        if (hist.length > 40) hist.shift();
+        hrNum.classList.remove('beat');
+        void hrNum.getBBox();
+        hrNum.classList.add('beat');
+        var ping = document.getElementById('hrPing');
+        ping.setAttribute('stroke', z.color);
+        // 一圈涟漪时长：在 1.9s~0.36s 之间按心率细分。
+        // 用「50~140 bpm 铺满全程」的指数映射，让日常心率的快慢差看得出来；
+        // 超出 50/140 就压在上下限上。
+        var t = Math.max(0, Math.min(1, (bpm - 50) / 90));
+        var dur = 1.9 * Math.pow(0.36 / 1.9, t);
+        ping.style.setProperty('--beat', dur.toFixed(2) + 's');
+        ping.classList.remove('on');
+        void ping.getBoundingClientRect();
+        ping.classList.add('on');
+      }
+      drawSpark(z.color);
+      hrNum.classList.remove('nosig');
+    } else {
+      hrNum.textContent = '--';
+      hrNum.style.fill = '#5d6b7d';
+      hrNum.style.color = '#5d6b7d';
+      hrGauge.set(0, '#5d6b7d');
+      paintZoneRing(hrZoneEls, null);
+      hrNum.classList.add('nosig');
+    }
+
+    var btNum = document.getElementById('btNum');
+    if (d.battery != null) {
+      var bc = battColor(d.battery);
+      btNum.textContent = Math.round(d.battery);
+      btNum.style.fill = bc;
+      btNum.style.color = bc;
+      btGauge.set(d.battery, bc);
+      paintZoneRing(btZoneEls, d.battery);
+      btNum.classList.remove('nosig');
+    } else {
+      btNum.textContent = '--';
+      btNum.style.fill = '#5d6b7d';
+      btNum.style.color = '#5d6b7d';
+      btGauge.set(0, '#5d6b7d');
+      paintZoneRing(btZoneEls, null);
+      btNum.classList.add('nosig');
+    }
+
+    var dev = d.device || '未连接';
+    document.getElementById('devline').textContent =
+      'DEV // ' + dev + (d.rssi != null ? '   RSSI ' + d.rssi : '');
+    document.getElementById('statline').textContent =
+      (d.connected ? 'LINK // SYNC' : 'LINK // SEARCHING') + (d.error ? '  · ' + d.error : '');
+
+    // 中间信息块
+    var iDev = document.getElementById('iDev');
+    var iLink = document.getElementById('iLink');
+    iDev.textContent = dev;
+    iDev.title = dev;
+    document.getElementById('iBatt').textContent =
+      d.battery != null ? Math.round(d.battery) + '%' : '--';
+    document.getElementById('iRssi').textContent =
+      d.rssi != null ? d.rssi + ' dBm' : '--';
+    document.getElementById('iSamp').textContent =
+      d.samples != null ? d.samples : '--';
+    iLink.textContent = d.connected ? 'SYNC' : 'SEARCH';
+    iLink.style.color = d.connected ? '#2bff88' : '#ff8a1e';
+  }
+
+  // 适配：让针和弧的动效只在数值变化时触发
+  var es = null;
+  function connectSSE() {
+    try { if (es) es.close(); } catch (e) {}
+    es = new EventSource('/events');
+    es.onmessage = function (ev) { try { render(JSON.parse(ev.data)); } catch (e) {} };
+    es.onerror = function () { try { es.close(); } catch (e) {} es = null; setTimeout(connectSSE, 2500); };
+  }
+
+  function poll() {
+    fetch('/api/hr', { cache: 'no-store' }).then(function (r) { return r.json(); })
+      .then(render).catch(function () {});
+  }
+  function tickClock() {
+    var d = new Date();
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    document.getElementById('clock').textContent =
+      p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  poll();
+  connectSSE();
+  setInterval(poll, 3000);
+  setInterval(tickClock, 1000);
+  tickClock();
+})();
+</script>
+</body>
+</html>
