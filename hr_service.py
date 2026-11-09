@@ -596,7 +596,10 @@ class HRService:
                                no_cache=True)
         elif path == "/api/default-theme":
             # 设置页的「恢复默认」用这份，和代码里的出厂值保持同一处定义
-            body = {"theme": json.loads(json.dumps(DEFAULT_CFG["theme"]))}
+            body = {
+                "theme": json.loads(json.dumps(DEFAULT_CFG["theme"])),
+                "zones": json.loads(json.dumps(DEFAULT_CFG["zones"])),
+            }
             await self.respond(writer, 200, "application/json; charset=utf-8",
                                json.dumps(body, ensure_ascii=False).encode("utf-8"),
                                no_cache=True)

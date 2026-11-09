@@ -55,7 +55,19 @@
   .zone { border: 1px solid #232833; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #111620; }
   .zone .top { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
   .zone .top input[type=text] { flex: 1; }
-  .zone .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+  .zone .rng { display: flex; gap: 6px; align-items: center; font: 12px/1 "Consolas", monospace; color: #8b98ab; }
+  .zone .rng b { color: #cfe0f5; font-weight: 500; }
+  .zone .rng input { width: 74px; }
+  .zone .rng .inf { color: #5d6b7d; }
+  .zband { display: flex; height: 26px; border-radius: 6px; overflow: hidden; margin: 2px 0 8px;
+           border: 1px solid #232833; background: #0d1119; }
+  .zband i { display: flex; align-items: center; justify-content: center; font: 10px/1 "Segoe UI";
+             color: rgba(0, 0, 0, .72); overflow: hidden; white-space: nowrap; letter-spacing: .02em; }
+  .zbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .zwarn { font-size: 11px; color: #e0b05a; }
+  .mini { background: #1b2130; color: #cfe0f5; border: 1px solid #2a3242; border-radius: 6px;
+          padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .mini:hover { background: #222a3a; }
   .asset { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed #232833; font-size: 11px; }
   .asset:last-child { border-bottom: 0; }
   .asset .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #cbd6e6; }
@@ -355,7 +367,13 @@
   </div>
 
   <div class="box">
-    <h2>心率分档（换图标 / 颜色 / 名字）</h2>
+    <h2>心率分档</h2>
+    <div class="sub">只改「分界值」，相邻两档自动接上，不会重叠也不会漏；右边色带就是浮层上的样子。</div>
+    <div id="c-band" class="zband"></div>
+    <div class="zbar">
+      <button id="c-zalign" class="mini">一键对齐连续</button>
+      <span id="c-zwarn" class="zwarn"></span>
+    </div>
     <div id="c-zones"></div>
   </div>
 
@@ -397,6 +415,8 @@
     <div id="stagebar">
       <span>预览区</span>
       <span class="sp"></span>
+      <span class="nm" id="diyUrl">/overlay</span>
+      <button class="btn" id="c-copy" title="复制这个地址，粘贴到 OBS 浏览器源的 URL 里">复制 OBS 地址</button>
     </div>
     <div id="frameWrap"><iframe id="frame" src="/overlay" title="预览"></iframe></div>
     <div id="skinWrap"><iframe id="skinFrame" title="皮肤预览"></iframe></div>
@@ -497,36 +517,138 @@
     });
   }
 
+  // 心率分档：内部按「分界值」编辑（zone i 覆盖 b[i] .. b[i+1]），保存时还原成 min/max
+  var zBounds = [];
+
+  function zonesToBounds() {
+    var zs = zones.slice().sort(function (a, b) { return (+a.min || 0) - (+b.min || 0); });
+    var b = [];
+    b.push(Math.max(0, Math.round(+zs[0].min || 0)));
+    for (var i = 0; i < zs.length - 1; i++) {
+      var v = Math.round(+zs[i].max || 0);
+      if (v <= b[i]) v = b[i] + 1;
+      b.push(v);
+    }
+    var last = Math.round(+zs[zs.length - 1].max || 0);
+    if (last <= b[b.length - 1]) last = b[b.length - 1] + 1;
+    b.push(last);
+    return b;
+  }
+
+  function paintBand() {
+    var host = el('c-band');
+    if (!host) return;
+    var lo = zBounds[0], hi = zBounds[zBounds.length - 1];
+    var span = Math.max(1, hi - lo);
+    host.innerHTML = '';
+    for (var i = 0; i < zones.length; i++) {
+      var w = (zBounds[i + 1] - zBounds[i]) / span * 100;
+      var seg = document.createElement('i');
+      seg.style.width = Math.max(2, w) + '%';
+      seg.style.background = zones[i].color || '#43d17c';
+      seg.textContent = w > 9 ? (zones[i].name || '') : '';
+      seg.title = (zones[i].name || '') + '  ' + zBounds[i] + '–' + zBounds[i + 1];
+      host.appendChild(seg);
+    }
+    var warn = el('c-zwarn');
+    if (warn) {
+      var bad = 0;
+      for (var k = 1; k < zBounds.length - 1; k++) {
+        if (zBounds[k] <= zBounds[k - 1] || zBounds[k] >= zBounds[k + 1]) bad++;
+      }
+      warn.textContent = bad ? (bad + ' 个分界值挤在一起了，点右边按钮对齐一下') : '';
+    }
+  }
+
   function buildZones() {
+    zones = zones.slice().sort(function (a, b) { return (+a.min || 0) - (+b.min || 0); });
+    zBounds = zonesToBounds();
     var host = el('c-zones');
     host.innerHTML = '';
     zones.forEach(function (z, i) {
       var d = document.createElement('div');
       d.className = 'zone';
+      var tail = (i < zones.length - 1)
+        ? '<input type="number" id="z-cut-' + i + '" value="' + zBounds[i + 1] + '" title="上一档的最高心率（改这里，下一档自动跟着接上）">'
+        : '<span class="inf">+</span>';
       d.innerHTML =
         '<div class="top">' +
           '<input type="color" id="z-color-' + i + '" value="' + (z.color || '#43d17c') + '">' +
           '<input type="text" id="z-name-' + i + '" value="' + (z.name || '') + '" placeholder="档位名">' +
         '</div>' +
-        '<div class="grid2">' +
-          '<input type="number" id="z-min-' + i + '" value="' + (z.min == null ? 0 : z.min) + '" title="下限">' +
-          '<input type="number" id="z-max-' + i + '" value="' + (z.max == null ? 0 : z.max) + '" title="上限">' +
+        '<div class="rng">' +
+          '<span>心率</span><b id="z-lo-' + i + '">' + zBounds[i] + '</b>' +
+          '<span>→</span>' + tail + '<span class="inf">bpm</span>' +
         '</div>' +
         '<select id="z-icon-' + i + '"></select>';
       host.appendChild(d);
 
-      var minEl = document.getElementById('z-min-' + i), maxEl = document.getElementById('z-max-' + i);
-      function fixRange() {
-        var lo = +minEl.value || 0, hi = +maxEl.value || 0;
-        if (hi <= lo) maxEl.value = lo + 1;
-      }
-      ['input', 'change'].forEach(function (ev) {
-        ['z-color-' + i, 'z-name-' + i, 'z-min-' + i, 'z-max-' + i, 'z-icon-' + i].forEach(function (id) {
-          document.getElementById(id).addEventListener(ev, function () { fixRange(); scheduleSave(); });
+      ['z-color-' + i, 'z-name-' + i, 'z-icon-' + i].forEach(function (id) {
+        document.getElementById(id).addEventListener('input', function () {
+          if (id.indexOf('z-color') === 0) zones[i].color = document.getElementById(id).value;
+          if (id.indexOf('z-name') === 0) zones[i].name = document.getElementById(id).value;
+          paintBand();
+          scheduleSave();
         });
       });
+
+      var cut = document.getElementById('z-cut-' + i);
+      if (cut) {
+        // 改这一档的上限 → 后面所有档整体平移同样的差值（各自宽度不变）
+        cut.addEventListener('focus', function () { cut._base = zBounds[i + 1]; });
+        cut.addEventListener('input', function () {
+          var v = Math.round(+cut.value || 0);
+          var lo = zBounds[i] + 1;
+          if (v < lo) { v = lo; cut.value = v; }
+          zBounds[i + 1] = v;
+          paintBand();
+        });
+        cut.addEventListener('change', function () {
+          var base = cut._base == null ? zBounds[i + 1] : cut._base;
+          var delta = zBounds[i + 1] - base;
+          cut._base = zBounds[i + 1];
+          if (delta) {
+            for (var k = i + 2; k < zBounds.length; k++) {
+              zBounds[k] = Math.max(zBounds[k - 1] + 1, zBounds[k] + delta);
+            }
+          }
+          syncRows();
+          scheduleSave();
+        });
+      }
     });
+    paintBand();
     buildAssetSelects();
+  }
+
+  // 把 zBounds 抄回每一行（不重建 DOM，免得输入框丢焦点）
+  function syncRows() {
+    for (var i = 0; i < zones.length; i++) {
+      var lo = document.getElementById('z-lo-' + i);
+      if (lo) lo.textContent = zBounds[i];
+      var cut = document.getElementById('z-cut-' + i);
+      if (cut) cut.value = zBounds[i + 1];
+    }
+    paintBand();
+  }
+
+  // 把所有分界值排成连续、不留缝的一条链
+  function alignZones() {
+    var zs = zones.slice().sort(function (a, b) { return (+a.min || 0) - (+b.min || 0); });
+    var cuts = [];
+    for (var i = 0; i < zs.length - 1; i++) cuts.push(Math.round(+zs[i].max || 0));
+    cuts.sort(function (a, b) { return a - b; });
+    var b = [Math.max(0, Math.round(+zs[0].min || 0))];
+    for (var k = 0; k < cuts.length; k++) {
+      var v = Math.max(b[k] + 1, cuts[k]);
+      b.push(v);
+    }
+    b.push(Math.max(b[b.length - 1] + 1, Math.round(+zs[zs.length - 1].max || 0)));
+    for (var j = 0; j < zs.length; j++) { zs[j].min = b[j]; zs[j].max = b[j + 1]; }
+    zones = zs;
+    buildZones();
+    status('已对齐成连续分档', 'ok');
+    scheduleSave();
   }
 
   function switchTab(which) {
@@ -538,6 +660,8 @@
     // 两个预览视窗，切页签就换视窗
     el('frameWrap').style.display = diy ? '' : 'none';
     el('hint').style.display = diy ? '' : 'none';
+    if (el('diyUrl')) el('diyUrl').style.display = diy ? '' : 'none';
+    if (el('c-copy')) el('c-copy').style.display = diy ? '' : 'none';
     el('skinWrap').style.display = diy ? 'none' : 'block';
     el('stageEmpty').style.display = 'none';
     if (!diy) loadSkins();
@@ -718,8 +842,8 @@
           name: document.getElementById('z-name-' + i).value,
           color: document.getElementById('z-color-' + i).value,
           icon: document.getElementById('z-icon-' + i).value,
-          min: +document.getElementById('z-min-' + i).value,
-          max: +document.getElementById('z-max-' + i).value
+          min: zBounds[i],
+          max: zBounds[i + 1]
         };
       })
     };
@@ -788,6 +912,13 @@
       uptime_show: false, uptime_size: 11, uptime_offx: 0, uptime_offy: 0, uptime_label: '时长',
       batt: 'off', batt_size: 22, batt_num: 'in', batt_offx: 0, batt_offy: 0
     };
+    var FALLBACK_ZONES = [
+      { name: '很低', min: 0, max: 50, color: '#4ea1ff', icon: '' },
+      { name: '静息', min: 50, max: 70, color: '#43d17c', icon: '' },
+      { name: '日常', min: 70, max: 100, color: '#ffd166', icon: '' },
+      { name: '运动', min: 100, max: 130, color: '#ff8a3d', icon: '' },
+      { name: '冲刺', min: 130, max: 300, color: '#ff3b5c', icon: '' }
+    ];
     el('c-default').onclick = function () {
       status('正在恢复…');
       fetch('/api/default-theme', { cache: 'no-store' })
@@ -795,19 +926,44 @@
         .catch(function () { return null; })
         .then(function (d) {
           var th = (d && (d.theme || d)) || FALLBACK_THEME;
+          var zs = (d && d.zones) || FALLBACK_ZONES;
           return fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ theme: th })
+            body: JSON.stringify({ theme: th, zones: zs })
           });
         })
         .then(function (r) { return r.json(); })
         .then(function () { return refreshAll(); })
-        .then(function () { status('已恢复默认外观（只留图标 + 数字）', 'ok'); })
+        .then(function () { status('已恢复默认：外观 + 心率分档', 'ok'); })
         .catch(function (e) { status('恢复默认失败: ' + e, 'err'); });
     };
 
     el('c-icon-up').onclick = function () { el('c-icon-file').click(); };
+    // DIY 浮层的 OBS 地址（以前有，被我不小心删了，这里补回来）
+    (function () {
+      var url = location.origin + '/overlay';
+      var lab = el('diyUrl');
+      if (lab) lab.textContent = url;
+      var btn = el('c-copy');
+      if (btn) btn.onclick = function () {
+        var done = function (ok) {
+          status(ok ? '已复制：' + url : '复制失败，地址是 ' + url, ok ? 'ok' : 'err');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () { done(true); },
+                                                   function () { done(false); });
+        } else {
+          var t = document.createElement('textarea');
+          t.value = url; document.body.appendChild(t); t.select();
+          var ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+          document.body.removeChild(t);
+          done(ok);
+        }
+      };
+    })();
+    if (el('c-zalign')) el('c-zalign').onclick = alignZones;
     el('c-icon-file').onchange = function (e) { upload(e.target.files[0], 'c-icon'); };
     el('c-bg-up').onclick = function () { el('c-bg-file').click(); };
     el('c-bg-file').onchange = function (e) { upload(e.target.files[0], 'c-bg'); };
